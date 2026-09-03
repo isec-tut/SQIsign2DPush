@@ -99,36 +99,36 @@ signing time was spent in quaternion-related code.
 Example output:
 
 ```text
-Average keygen time [19.39345 ms]
-Avg keygen:      48.43368 Mcycles
-Median keygen:   44.82253 Mcycles
-Min keygen:      32.56642 Mcycles
-Max keygen:      114.16478 Mcycles
+Average keygen time [14.20469 ms]
+Avg keygen:      35.45607 Mcycles
+Median keygen:   33.23159 Mcycles
+Min keygen:      24.34429 Mcycles
+Max keygen:      73.93395 Mcycles
   Keygen category ratios (denominator: avg keygen)
-    Isogeny computations:         4.97971 ms ( 25.68%)
-    EC/basis except isogeny:      7.06187 ms ( 36.41%)
-    Quaternion algorithms:        7.15265 ms ( 36.88%)
-    Other:                        0.19922 ms (  1.03%)
-average signing time [53.62923 ms]
-Avg signing:     133.93502 Mcycles
-Median signing:  129.79616 Mcycles
-Min signing:     109.86171 Mcycles
-Max signing:     206.40466 Mcycles
+    Isogeny computations:         3.48792 ms ( 24.55%)
+    EC/basis except isogeny:      4.98671 ms ( 35.11%)
+    Quaternion algorithms:        5.58854 ms ( 39.34%)
+    Other:                        0.14152 ms (  1.00%)
+average signing time [28.90103 ms]
+Avg signing:     72.13934 Mcycles
+Median signing:  70.71151 Mcycles
+Min signing:     58.24607 Mcycles
+Max signing:     103.74216 Mcycles
   Signing category ratios (denominator: avg signing)
-    Isogeny computations:         13.72251 ms ( 25.59%)
-    EC/basis except isogeny:      12.11644 ms ( 22.59%)
-    Quaternion algorithms:        27.23998 ms ( 50.79%)
-    Other:                        0.55030 ms (  1.03%)
-average verification time [6.27181 ms]
-Avg verify:      15.66337 Mcycles
-Median verify:   15.52649 Mcycles
-Min verify:      14.96457 Mcycles
-Max verify:      19.75463 Mcycles
+    Isogeny computations:         10.46034 ms ( 36.19%)
+    EC/basis except isogeny:      9.32175 ms ( 32.25%)
+    Quaternion algorithms:        8.69469 ms ( 30.08%)
+    Other:                        0.42425 ms (  1.47%)
+average verification time [4.73436 ms]
+Avg verify:      11.81735 Mcycles
+Median verify:   11.79898 Mcycles
+Min verify:      11.65920 Mcycles
+Max verify:      12.18837 Mcycles
   Verify category ratios (denominator: avg verify)
-    Isogeny computations:         4.02521 ms ( 64.18%)
-    EC/basis except isogeny:      2.16358 ms ( 34.50%)
+    Isogeny computations:         3.03324 ms ( 64.07%)
+    EC/basis except isogeny:      1.63858 ms ( 34.61%)
     Quaternion algorithms:        0.00000 ms (  0.00%)
-    Other:                        0.08302 ms (  1.32%)
+    Other:                        0.06254 ms (  1.32%)
 All tests passed!
 ```
 
