@@ -1,0 +1,2 @@
+"/usr/bin/gcc-ar-11" cr libsqisign_gf_lvl5.a CMakeFiles/sqisign_gf_lvl5.dir/fp_hd512.c.o CMakeFiles/sqisign_gf_lvl5.dir/fp.c.o CMakeFiles/sqisign_gf_lvl5.dir/fp2.c.o
+"/usr/bin/gcc-ranlib-11" libsqisign_gf_lvl5.a

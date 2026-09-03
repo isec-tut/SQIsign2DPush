@@ -1,0 +1,1 @@
+/usr/bin/cc   -O3 -std=c99 -Wno-error=strict-prototypes -fvisibility=hidden -funroll-loops -Wno-error=implicit-function-declaration -Wno-error=attributes -O3 -DNDEBUG -flto -fno-fat-lto-objects CMakeFiles/sqisign_test_gf_lvl3_fp.dir/test_fp.c.o CMakeFiles/sqisign_test_gf_lvl3_fp.dir/test_extras.c.o -o sqisign_test_gf_lvl3_fp  ../libsqisign_gf_lvl3.a 

@@ -1,0 +1,10 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/kitahama/ドキュメント/SQIsign2DPush/sqisign2dpush_impl_c (5)/sqisign2dpush_impl_c/build/CMakeFiles/_CMakeLTOTest-C/src/foo.c
+
