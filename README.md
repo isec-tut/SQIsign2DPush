@@ -1,7 +1,7 @@
 # C implementation of SQIsign2dPush
 
 This library is a C implementation of SQIsign2DPush
-It uses the base code of SQIsign (sqisign.org)
+It uses the base code of [SQIsign-v2.0](https://github.com/SQIsign/the-sqisign/tree/nist-v2) and [SQIsignHD-v1.0](https://github.com/Pierrick-Dartois/SQISignHD-lib/tree/v1).
 
 ## Requirements
 
@@ -47,6 +47,11 @@ cmake --build build --target sqisign_test_sqisign2dpush_lvl1
 ```
 
 ## Finite-field benchmarks
+
+The `Fp` arithmetic in each parameter level's `fp.c` uses the corresponding
+generated file: `fp_hd256.c` for level 1, `fp_hd384.c` for level 3, and
+`fp_hd512.c` for level 5. These files are generated using
+[Fiat-Crypto](https://github.com/mit-plv/fiat-crypto).
 
 The finite-field test binaries accept either `test <reps>` for correctness
 tests or `bench <reps>` for cycle-count benchmarks. For example, to benchmark
