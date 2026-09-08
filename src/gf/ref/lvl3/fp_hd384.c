@@ -4164,15 +4164,14 @@ uint32_t fp_decode(fp_t *d, const void *src) {
   for (int i = 0; i < 6; i++)
     fiat_p384_subborrowx_u64(&dummy[i], &borrow, borrow, t[i], P[i]);
 
-  uint32_t res = (uint32_t)(-(int32_t)borrow); /* 0xffffffff if t < P */
+  /* Use a full limb mask and satisfy Fiat's input bound t < P even
+   * when the encoding is invalid. Invalid encodings decode to zero. */
+  uint64_t mask = (uint64_t)0 - (uint64_t)borrow;
+  for (int i = 0; i < 6; i++)
+    t[i] &= mask;
 
   fiat_p384_to_montgomery((uint64_t *)d, t);
-
-  uint64_t *d_ptr = (uint64_t *)d;
-  for (int i = 0; i < 6; i++)
-    d_ptr[i] &= (uint64_t)res;
-
-  return res;
+  return (uint32_t)mask;
 }
 
 static inline uint8_t add_carry_lvl3(uint8_t cc, uint64_t a, uint64_t b,

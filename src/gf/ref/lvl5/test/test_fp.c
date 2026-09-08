@@ -11,6 +11,74 @@ extern const digit_t p[NWORDS_FIELD];
 static int BENCH_LOOPS = 100000; // Number of iterations per bench
 static int TEST_LOOPS = 100000;  // Number of iterations per test
 
+/* Serialize ordinary integers independently of fp_encode, which takes
+ * Montgomery residues. */
+static bool fp_decode_case(const fp_t value, bool valid)
+{
+    uint8_t bytes[sizeof(fp_t)], encoded[sizeof(fp_t)];
+    fp_t decoded, expected;
+
+    for (size_t i = 0; i < sizeof(bytes); i++)
+        bytes[i] = (uint8_t)(value[i / sizeof(digit_t)] >>
+                             (8 * (i % sizeof(digit_t))));
+
+    memset(decoded, 0xa5, sizeof(decoded));
+    uint32_t status = fp_decode(&decoded, bytes);
+    if (status != (valid ? UINT32_MAX : 0))
+        return false;
+
+    if (!valid)
+        return fp_is_zero(decoded);
+
+    fp_tomont(expected, value);
+    if (!fp_is_equal(decoded, expected))
+        return false;
+
+    fp_encode(encoded, &decoded);
+    return memcmp(encoded, bytes, sizeof(bytes)) == 0;
+}
+
+static bool fp_decode_test(void)
+{
+    fp_t value;
+
+    fp_set(value, 0);
+    if (!fp_decode_case(value, true))
+        return false;
+    fp_set(value, 1);
+    if (!fp_decode_case(value, true))
+        return false;
+
+    fp_copy(value, p);
+    value[0]--; /* p - 1: p has an all-ones low limb. */
+    if (!fp_decode_case(value, true))
+        return false;
+
+    fp_copy(value, p);
+    if (!fp_decode_case(value, false))
+        return false;
+
+    /* p + 1, including carry propagation through all-ones limbs. */
+    for (size_t i = 0; i < NWORDS_FIELD; i++) {
+        value[i]++;
+        if (value[i] != 0)
+            break;
+    }
+    if (!fp_decode_case(value, false))
+        return false;
+
+    memset(value, 0xff, sizeof(value));
+    if (!fp_decode_case(value, false))
+        return false;
+
+    for (int i = 0; i < TEST_LOOPS; i++) {
+        fprandom_test(value);
+        if (!fp_decode_case(value, true))
+            return false;
+    }
+    return true;
+}
+
 bool fp_test() { // Tests for the field arithmetic
   bool OK = true;
   int n, passed;
@@ -19,6 +87,12 @@ bool fp_test() { // Tests for the field arithmetic
   printf("\n-------------------------------------------------------------------"
          "-------------------------------------\n\n");
   printf("Testing field arithmetic over GF(p): \n\n");
+
+  if (!fp_decode_test()) {
+    printf("  GF(p) decoding tests... FAILED\n");
+    return false;
+  }
+  printf("  GF(p) decoding tests ............................................ PASSED\n");
 
   // Field addition
   passed = 1;

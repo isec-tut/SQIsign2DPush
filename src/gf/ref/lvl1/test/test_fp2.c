@@ -11,6 +11,37 @@ static int BENCH_LOOPS = 100000;       // Number of iterations per bench
 static int TEST_LOOPS  = 100000;       // Number of iterations per test
 
 
+/* Check the sign in ordinary representation, independently of fp_encode. */
+static bool fp2_sqrt_has_canonical_sign(const fp2_t *root)
+{
+    fp2_t ordinary;
+    fp2_frommont(&ordinary, root);
+    return !(ordinary.re[0] & 1) &&
+           (!fp_is_zero(ordinary.re) || !(ordinary.im[0] & 1));
+}
+
+static bool fp2_sqrt_sign_test(void)
+{
+    fp2_t input, root, square;
+    for (int i = 0; i < 3; i++) {
+        fp2_set_zero(&input);
+        if (i == 1)
+            fp_set(input.re, 1);
+        if (i == 2) {
+            fp_copy(input.re, p);
+            input.re[0]--; /* -1: the root has zero real part. */
+        }
+        fp2_tomont(&input, &input);
+        fp2_copy(&root, &input);
+        fp2_sqrt(&root);
+        fp2_sqr(&square, &root);
+        if (!fp2_is_equal(&square, &input) ||
+            !fp2_sqrt_has_canonical_sign(&root))
+            return false;
+    }
+    return true;
+}
+
 bool fp2_test()
 { // Tests for the GF(p^2) arithmetic
     bool OK = true;
@@ -19,6 +50,12 @@ bool fp2_test()
 
     printf("\n--------------------------------------------------------------------------------------------------------\n\n"); 
     printf("Testing arithmetic over GF(p^2): \n\n"); 
+
+    if (!fp2_sqrt_sign_test()) {
+        printf("  GF(p^2) square root sign tests... FAILED\n");
+        return false;
+    }
+    printf("  GF(p^2) square root sign tests ................................... PASSED\n");
 
     // Addition in GF(p^2)
     passed = 1;
@@ -178,6 +215,7 @@ bool fp2_test()
         if (fp2_is_square(&mc) != 1) { passed = 0; break; }        
 
         fp2_sqrt(&mc);                                              // c = a = sqrt(c) 
+        if (!fp2_sqrt_has_canonical_sign(&mc)) { passed = 0; break; }
         fp2_neg(&md, &mc);
         fp2_frommont(&c, &mc);
         fp2_frommont(&d, &md);

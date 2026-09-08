@@ -2429,24 +2429,29 @@ void fp_mont_setone(uint64_t *out) { fiat_p256_set_one(out); }
 void fp_neg(uint64_t *out, const uint64_t *a) { fiat_p256_opp(out, a); }
 
 void fp_encode(void *dst, const fp_t *a) {
-  fiat_p256_to_bytes((uint8_t *)dst, (const uint64_t *)a);
+  uint64_t c[4];
+  fiat_p256_from_montgomery(c, (const uint64_t *)a);
+  fiat_p256_to_bytes((uint8_t *)dst, c);
 }
 
 uint32_t fp_decode(fp_t *d, const void *src) {
-  fiat_p256_from_bytes((uint64_t *)d, (const uint8_t *)src);
-  // Check if d < p
-  uint64_t temp[4];
-  fiat_p256_uint1 borrow;
-  static const uint64_t p_val[4] = {0xffffffffffffffff, 0xffffffffffffffff,
-                                    0xa7ecc14ec3fa83c7, 0x62d7f37f9815e5fc};
-  fiat_p256_subborrowx_u64(&temp[0], &borrow, 0, ((uint64_t *)d)[0], p_val[0]);
-  fiat_p256_subborrowx_u64(&temp[1], &borrow, borrow, ((uint64_t *)d)[1],
-                           p_val[1]);
-  fiat_p256_subborrowx_u64(&temp[2], &borrow, borrow, ((uint64_t *)d)[2],
-                           p_val[2]);
-  fiat_p256_subborrowx_u64(&temp[3], &borrow, borrow, ((uint64_t *)d)[3],
-                           p_val[3]);
-  return (uint32_t)borrow; // borrow=1 means d < p
+  uint64_t t[4];
+  fiat_p256_from_bytes(t, (const uint8_t *)src);
+
+  /* Check if t < P */
+  uint64_t dummy[4];
+  fiat_p256_uint1 borrow = 0;
+  for (int i = 0; i < 4; i++)
+    fiat_p256_subborrowx_u64(&dummy[i], &borrow, borrow, t[i], P[i]);
+
+  /* Use a full limb mask and satisfy Fiat's input bound t < P even
+   * when the encoding is invalid. Invalid encodings decode to zero. */
+  uint64_t mask = (uint64_t)0 - (uint64_t)borrow;
+  for (int i = 0; i < 4; i++)
+    t[i] &= mask;
+
+  fiat_p256_to_montgomery((uint64_t *)d, t);
+  return (uint32_t)mask;
 }
 
 static inline void enc64le(void *dst, uint64_t x) {

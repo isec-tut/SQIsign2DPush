@@ -37,7 +37,10 @@ void fp_tomont(digit_t *out, const digit_t *a);
 void fp_frommont(digit_t *out, const digit_t *a);
 void fp_mont_setone(digit_t *out);
 
+/* Encode a Montgomery residue as a canonical little-endian integer. */
 void fp_encode(void *dst, const fp_t *a);
+/* Decode a canonical little-endian integer to Montgomery form.
+ * Return UINT32_MAX on success; otherwise return 0 and set *d to zero. */
 uint32_t fp_decode(fp_t *d, const void *src);
 void fp_decode_reduce(fp_t *d, const void *src, size_t len);
 
