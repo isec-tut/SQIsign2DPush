@@ -55,7 +55,7 @@ generated file: `fp_hd256.c` for level 1, `fp_hd384.c` for level 3, and
 
 The finite-field test binaries accept either `test <reps>` for correctness
 tests or `bench <reps>` for cycle-count benchmarks. For example, to benchmark
-the level 1 GF(p) and GF(p²) arithmetic from the repository root:
+the level 1 $GF(p)$ and $GF(p^2)$ arithmetic from the repository root:
 
 ```sh
 cmake --build build --target sqisign_test_gf_lvl1_fp
@@ -179,9 +179,9 @@ The default build type uses the flags `-O3 -Wstrict-prototypes -Wno-error=strict
 
 ## License
 
-sqisign2dpush is licensed under Apache-2.0. See LICENSE and NOTICE in the root directory. 
+SQIsign2DPush is licensed under Apache-2.0. See LICENSE and NOTICE in the root directory. 
 
-Most functionalities of this code are based on the original SQIsign implementation <https://github.com/SQISign/the-sqisign> under the license MIT: "Copyright (c) 2023 The SQIsign team".
+Most functionalities of this code are based on [SQIsign-v2.0](https://github.com/SQIsign/the-sqisign/tree/nist-v2) and [SQIsignHD-v1.0](https://github.com/Pierrick-Dartois/SQISignHD-lib/tree/v1) under the license MIT: "Copyright (c) 2023 The SQIsign team".
 
 Third party code is used in some test and common code files of this directory (`Signature`):
 
