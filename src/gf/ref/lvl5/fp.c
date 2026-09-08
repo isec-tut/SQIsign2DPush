@@ -139,80 +139,6 @@ void mp_shiftl(digit_t *x, const unsigned int shift,
   x[0] <<= shift;
 }
 
-/* -----------------------------------------------------------------------
- * fp_exp3div4 — out = a^((p-3)/4) mod p   (optimized 2-3 addition chain)
- *
- * p = 2^263 * 3^156 - 1,   e = (p-3)/4 = 2^261 * 3^156 - 1
- *
- * Decomposition:  e = 3^156 * (2^261 - 1) + (3^156 - 1)
- *   => a^e = (a^{3^156})^{2^261 - 1}  *  a^{3^156 - 1}
- * ----------------------------------------------------------------------- */
-
-/* Helper: out = x^{2^k} (square x exactly k times) */
-void fp_sqr_repeat(digit_t *out, const digit_t *x, int k) {
-  fp_copy(out, x);
-  for (int i = 0; i < k; i++)
-    fp_sqr(out, out);
-}
-
-void fp_exp3div4(digit_t *out, const digit_t *a) {
-  fp_t t[16], t2;
-  // 1. Precompute odd powers: a^1, a^3, ..., a^31
-  fp_copy(t[0], a);
-  fp_sqr(t2, t[0]);
-  for (int i = 1; i < 16; i++) {
-    fp_mul(t[i], t[i - 1], t2);
-  }
-
-  // Exponent: e = (p-3)/4 = 3^{156} * 2^{261} - 1
-  // Correct bytes from golden hex (64 bytes, Little Endian)
-  static const uint8_t exp[64] = {
-      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x1F,
-      0x26, 0x3B, 0x2B, 0xE4, 0xBB, 0x11, 0xD3, 0xA6, 0xA5, 0x54, 0x71,
-      0x70, 0x28, 0x36, 0x2E, 0x08, 0x80, 0xDB, 0x52, 0x11, 0x97, 0xD2,
-      0xC8, 0x97, 0xD9, 0x2E, 0x4C, 0x4C, 0x06, 0x15, 0x13};
-
-  fp_t res;
-  bool first = true;
-  int i = 508; // Approx bits for e5
-
-  while (i >= 0) {
-    uint8_t bit = (exp[i >> 3] >> (i & 7)) & 1;
-    if (bit == 0) {
-      if (!first)
-        fp_sqr(res, res);
-      i--;
-    } else {
-      int window_val = 1;
-      int best_len = 1;
-      for (int len = 2; len <= 5 && (i - len + 1) >= 0; len++) {
-        uint8_t b = (exp[(i - len + 1) >> 3] >> ((i - len + 1) & 7)) & 1;
-        if (b) {
-          best_len = len;
-          int v = 0;
-          for (int k = 0; k < len; k++) {
-            v |= ((exp[(i - k) >> 3] >> ((i - k) & 7)) & 1) << (len - 1 - k);
-          }
-          window_val = v;
-        }
-      }
-
-      if (first) {
-        fp_copy(res, t[window_val >> 1]);
-        first = false;
-      } else {
-        for (int k = 0; k < best_len; k++)
-          fp_sqr(res, res);
-        fp_mul(res, res, t[window_val >> 1]);
-      }
-      i -= best_len;
-    }
-  }
-  fp_copy(out, res);
-}
-
 void fp_inv(digit_t *a) {
   fp_t t;
   fp_exp3div4(t, a); // t = a^((p-3)/4)
@@ -552,18 +478,4 @@ bool fp_is_square(const digit_t *x) {
   uint32_t r = 1 - ((uint32_t)ls & 2);
   r &= ~fp_is_zero(x);
   return r == 1;
-}
-
-void fp_sqrt(digit_t *a) { // Square root computation, out = a^((p+1)/4) mod p
-  fp_t t, tmp;
-
-  fp_copy(t, a);
-  for (int i = 0; i < 156; i++) {
-    fp_sqr(tmp, t);
-    fp_mul(t, tmp, t); // t = t^3
-  }
-  for (int i = 0; i < 261; i++) {
-    fp_sqr(t, t);
-  }
-  fp_copy(a, t);
 }

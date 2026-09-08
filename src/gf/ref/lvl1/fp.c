@@ -115,87 +115,6 @@ void mp_shiftl(digit_t *x, const unsigned int shift,
   x[0] <<= shift;
 }
 
-/* -----------------------------------------------------------------------
- * fp_exp3div4 — out = a^((p-3)/4) mod p   (optimized 2-3 addition chain)
- *
- * p = 2^131 * 3^78 - 1,   e = (p-3)/4 = 2^129 * 3^78 - 1
- *
- * Decomposition:  e = 3^78 * (2^129 - 1) + (3^78 - 1)
- *   => a^e = (a^{3^78})^{2^129 - 1}  *  a^{3^78 - 1}
- *
- * Pass 1: cubing loop builds a^{3^78} (t) and a^{3^78-1} (s).
- *   3^78-1 = 2*(1 + 3 + 3^2 + ... + 3^77), so
- *   a^{(3^78-1)/2} = prod_{i=0}^{77} a^{3^i}.
- *   Then a^{3^78-1} = (a^{(3^78-1)/2})^2.
- *   Cost: 78 sqr (cubing) + 77 mul (product accumulation) + 1 sqr
- *       = 79 sqr + 77 mul
- *
- * Pass 2: x^{2^129-1} via recursive doubling.
- *   129 = 128+1.  Chain on powers of 2:
- *     x^{2^1-1}   = x                                             [free]
- *     x^{2^2-1}   = (x^{2^1-1})^{2^1} * x^{2^1-1}               [1 sqr + 1 mul]
- *     x^{2^4-1}   = (x^{2^2-1})^{2^2} * x^{2^2-1}               [2 sqr + 1 mul]
- *     x^{2^8-1}   = (x^{2^4-1})^{2^4} * x^{2^4-1}               [4 sqr + 1 mul]
- *     x^{2^16-1}  = (x^{2^8-1})^{2^8} * x^{2^8-1}               [8 sqr + 1 mul]
- *     x^{2^32-1}  = (x^{2^16-1})^{2^16} * x^{2^16-1}            [16 sqr + 1
- * mul] x^{2^64-1}  = (x^{2^32-1})^{2^32} * x^{2^32-1}            [32 sqr + 1
- * mul] x^{2^128-1} = (x^{2^64-1})^{2^64} * x^{2^64-1}            [64 sqr + 1
- * mul] x^{2^129-1} = (x^{2^128-1})^{2}   * x                     [1 sqr + 1
- * mul] Cost: 128 sqr + 8 mul
- *
- * Pass 3: combine  [1 mul]
- *   out = t^{2^129-1} * s
- *
- * Total: 207 sqr + 86 mul   (vs. generic ~254 sqr + ~127 mul)
- * ----------------------------------------------------------------------- */
-
-/* Helper: out = x^{2^k} (square x exactly k times) */
-static void fp_sqr_repeat(digit_t *out, const digit_t *x, int k) {
-  fp_copy(out, x);
-  for (int i = 0; i < k; i++)
-    fp_sqr(out, out);
-}
-
-void fp_exp3div4(digit_t *out, const digit_t *a) {
-  fp_t t, s, tmp;
-
-  /* --- Pass 1: cubing loop ---------------------------------------- */
-  /* Build t = a^{3^78} and s = a^{(3^78-1)/2} = prod a^{3^i}        */
-  fp_copy(t, a); /* t = a^{3^0} = a                          */
-  fp_set(s, 1);
-  fp_tomont(s, s); /* s = 1 (Montgomery)                       */
-
-  for (int i = 0; i < 78; i++) {
-    fp_mul(s, s, t);   /* s *= a^{3^i}                             */
-    fp_sqr(tmp, t);    /* tmp = t^2                                */
-    fp_mul(t, tmp, t); /* t   = t^3 = a^{3^{i+1}}                 */
-  }
-  /* t = a^{3^78}                                                      */
-  /* s = a^{1+3+9+...+3^77} = a^{(3^78-1)/2}                         */
-  fp_sqr(s, s); /* s = a^{3^78-1}                           */
-
-  /* --- Pass 2: t^{2^129-1} via recursive doubling ----------------- */
-  /*   129 = 128 + 1 ;  128 = 2^7                                     */
-  fp_t c[8]; /* c[k] stores t^{2^{2^k}-1} for k=0..6; c[7] = t^{2^129-1} */
-  fp_copy(c[0], t); /* t^{2^1-1} = t    */
-  for (int k = 1; k <= 6; k++) {
-    int half = 1 << (k - 1);             /* 2^{k-1}          */
-    fp_sqr_repeat(c[k], c[k - 1], half); /* (prev)^{2^half}  */
-    fp_mul(c[k], c[k], c[k - 1]);        /* * prev            */
-  }
-  /* c[6] = t^{2^64-1}                                                */
-  /* t^{2^128-1} = (c[6])^{2^64} * c[6]                              */
-  fp_sqr_repeat(c[7], c[6], 64);
-  fp_mul(c[7], c[7], c[6]); /* t^{2^128-1}      */
-
-  /* t^{2^129-1} = (t^{2^128-1})^2 * t                               */
-  fp_sqr(out, c[7]);
-  fp_mul(out, out, t); /* t^{2^129-1}      */
-
-  /* --- Pass 3: combine -------------------------------------------- */
-  fp_mul(out, out, s); /* (a^{3^78})^{2^129-1} * a^{3^78-1} = a^e  */
-}
-
 void fp_inv(digit_t *a) { // Modular inversion: a^(p-2)
                           // a^(p-2) = (a^((p-3)/4))^4 * a
   fp_t t;
@@ -478,18 +397,4 @@ bool fp_is_square(const digit_t *x) {
   uint32_t r = 1 - ((uint32_t)ls & 2);
   r &= ~fp_is_zero(x);
   return r == 1;
-}
-
-void fp_sqrt(digit_t *a) { // Square root: a^((p+1)/4)
-  fp_t t, tmp;
-
-  fp_copy(t, a);
-  for (int i = 0; i < 78; i++) {
-    fp_sqr(tmp, t);
-    fp_mul(t, tmp, t); // t = t^3
-  }
-  for (int i = 0; i < 129; i++) {
-    fp_sqr(t, t);
-  }
-  fp_copy(a, t);
 }

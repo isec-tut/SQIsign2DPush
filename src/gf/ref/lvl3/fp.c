@@ -17,7 +17,7 @@ extern void fiat_p384_mul(uint64_t out1[6], const uint64_t arg1[6],
                           const uint64_t arg2[6]);
 
 /* -------------------------------------------------------------------------
- * Bernstein-Yang Inversion (Safegcd) for Level 3 (384-bit)
+ * Fermat inversion using the generated (p-3)/4 exponentiation
  * ------------------------------------------------------------------------- */
 
 void fp_inv(digit_t *a) {
@@ -146,78 +146,6 @@ void mp_shiftl(digit_t *x, const unsigned int shift,
     SHIFTL(x[i], x[i - 1], shift, x[i], RADIX);
   }
   x[0] <<= shift;
-}
-
-/* -----------------------------------------------------------------------
- * fp_exp3div4 — out = a^((p-3)/4) mod p   (optimized 2-3 addition chain)
- *
- * p = 2^191 * 3^117 - 1,   e = (p-3)/4 = 2^189 * 3^117 - 1
- *
- * Decomposition:  e = 3^117 * (2^189 - 1) + (3^117 - 1)
- *   => a^e = (a^{3^117})^{2^189 - 1}  *  a^{3^117 - 1}
- * ----------------------------------------------------------------------- */
-
-/* Helper: out = x^{2^k} (square x exactly k times) */
-void fp_sqr_repeat(digit_t *out, const digit_t *x, int k) {
-  fp_copy(out, x);
-  for (int i = 0; i < k; i++)
-    fp_sqr(out, out);
-}
-
-void fp_exp3div4(digit_t *out, const digit_t *a) {
-  fp_t t[16], t2;
-  // 1. Precompute odd powers: a^1, a^3, ..., a^31
-  fp_copy(t[0], a);
-  fp_sqr(t2, t[0]);
-  for (int i = 1; i < 16; i++) {
-    fp_mul(t[i], t[i - 1], t2);
-  }
-
-  // Exponent: e = (p-3)/4 = 3^117 * 2^189 - 1
-  // Correct bytes from golden hex (47 bytes, Little Endian)
-  static const uint8_t exp[47] = {
-      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x5F,
-      0xA6, 0x95, 0x0A, 0xAF, 0x51, 0xB5, 0xD1, 0x42, 0x3D, 0x9F, 0x33, 0x62,
-      0x1A, 0x73, 0x1E, 0xAA, 0x65, 0x08, 0x15, 0x83, 0x0B, 0xDC, 0x56};
-
-  fp_t res;
-  bool first = true;
-  int i = 374; // MSB
-
-  while (i >= 0) {
-    uint8_t bit = (exp[i >> 3] >> (i & 7)) & 1;
-    if (bit == 0) {
-      if (!first)
-        fp_sqr(res, res);
-      i--;
-    } else {
-      int window_val = 1;
-      int best_len = 1;
-      for (int len = 2; len <= 5 && (i - len + 1) >= 0; len++) {
-        uint8_t b = (exp[(i - len + 1) >> 3] >> ((i - len + 1) & 7)) & 1;
-        if (b) {
-          best_len = len;
-          int v = 0;
-          for (int k = 0; k < len; k++) {
-            v |= ((exp[(i - k) >> 3] >> ((i - k) & 7)) & 1) << (len - 1 - k);
-          }
-          window_val = v;
-        }
-      }
-
-      if (first) {
-        fp_copy(res, t[window_val >> 1]);
-        first = false;
-      } else {
-        for (int k = 0; k < best_len; k++)
-          fp_sqr(res, res);
-        fp_mul(res, res, t[window_val >> 1]);
-      }
-      i -= best_len;
-    }
-  }
-  fp_copy(out, res);
 }
 
 // helper macros and functions for binary GCD Legendre symbol calculation
@@ -513,18 +441,4 @@ bool fp_is_square(const digit_t *x) {
   uint32_t r = 1 - ((uint32_t)ls & 2);
   r &= ~fp_is_zero(x);
   return r == 1;
-}
-
-void fp_sqrt(digit_t *a) {
-  fp_t t, tmp;
-
-  fp_copy(t, a);
-  for (int i = 0; i < 117; i++) {
-    fp_sqr(tmp, t);
-    fp_mul(t, tmp, t); // t = t^3
-  }
-  for (int i = 0; i < 189; i++) {
-    fp_sqr(t, t);
-  }
-  fp_copy(a, t);
 }

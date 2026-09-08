@@ -6,6 +6,8 @@
 // Global constants
 extern const digit_t p[NWORDS_FIELD];
 
+#include "../../test/fp_exp_tests.h"
+
 // Benchmark and test parameters  
 static int BENCH_LOOPS = 100000;       // Number of iterations per bench
 static int TEST_LOOPS  = 100000;       // Number of iterations per test
@@ -93,6 +95,12 @@ bool fp_test()
         return false;
     }
     printf("  GF(p) decoding tests ............................................ PASSED\n");
+
+    if (!fp_fixed_exp_test(TEST_LOOPS)) {
+        printf("  GF(p) fixed exponent tests... FAILED\n");
+        return false;
+    }
+    printf("  GF(p) fixed exponent tests ...................................... PASSED\n");
 
     // Field addition
     passed = 1;
