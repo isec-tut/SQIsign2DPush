@@ -1,0 +1,200 @@
+{
+  "compiler": "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+  "flags": [
+    "-O3",
+    "-funroll-loops",
+    "-flto",
+    "-shared",
+    "-fPIC",
+    "-Wl,-Bsymbolic",
+    "-DDISABLE_NAMESPACING",
+    "-DRADIX_64",
+    "-DTARGET_AMD64",
+    "-DTARGET_OS_UNIX",
+    "-DSQISIGN_BUILD_TYPE_REF"
+  ],
+  "cpu": 0,
+  "rounds": 9,
+  "levels": [
+    {
+      "level": 1,
+      "ns_per_op": {
+        "add": {
+          "before": 14.35,
+          "after": 4.29,
+          "speedup": 3.349
+        },
+        "sub": {
+          "before": 10.9,
+          "after": 4.16,
+          "speedup": 2.622
+        },
+        "mul": {
+          "before": 24.91,
+          "after": 16.07,
+          "speedup": 1.551
+        },
+        "sqr": {
+          "before": 24.73,
+          "after": 14.46,
+          "speedup": 1.71
+        },
+        "inv": {
+          "before": 7565.64,
+          "after": 4550.96,
+          "speedup": 1.662
+        },
+        "sqrt": {
+          "before": 6725.23,
+          "after": 4023.65,
+          "speedup": 1.671
+        },
+        "exp3div4": {
+          "before": 7508.08,
+          "after": 4444.59,
+          "speedup": 1.689
+        },
+        "is_square": {
+          "before": 1611.35,
+          "after": 1622.98,
+          "speedup": 0.993
+        },
+        "div3": {
+          "before": 7823.16,
+          "after": 18.91,
+          "speedup": 413.749
+        },
+        "fp2_mul": {
+          "before": 135.37,
+          "after": 63.72,
+          "speedup": 2.125
+        },
+        "fp2_sqr": {
+          "before": 87.84,
+          "after": 41.44,
+          "speedup": 2.12
+        }
+      }
+    },
+    {
+      "level": 3,
+      "ns_per_op": {
+        "add": {
+          "before": 20.08,
+          "after": 5.75,
+          "speedup": 3.495
+        },
+        "sub": {
+          "before": 15.25,
+          "after": 5.22,
+          "speedup": 2.921
+        },
+        "mul": {
+          "before": 55.13,
+          "after": 27.45,
+          "speedup": 2.009
+        },
+        "sqr": {
+          "before": 49.83,
+          "after": 23.43,
+          "speedup": 2.127
+        },
+        "inv": {
+          "before": 25669.9,
+          "after": 10412.19,
+          "speedup": 2.465
+        },
+        "sqrt": {
+          "before": 22108.57,
+          "after": 9137.5,
+          "speedup": 2.42
+        },
+        "exp3div4": {
+          "before": 25454.44,
+          "after": 10327.38,
+          "speedup": 2.465
+        },
+        "is_square": {
+          "before": 2678.48,
+          "after": 2780.17,
+          "speedup": 0.963
+        },
+        "div3": {
+          "before": 26173.06,
+          "after": 30.8,
+          "speedup": 849.913
+        },
+        "fp2_mul": {
+          "before": 268.8,
+          "after": 103.91,
+          "speedup": 2.587
+        },
+        "fp2_sqr": {
+          "before": 169.09,
+          "after": 67.86,
+          "speedup": 2.492
+        }
+      }
+    },
+    {
+      "level": 5,
+      "ns_per_op": {
+        "add": {
+          "before": 25.29,
+          "after": 7.21,
+          "speedup": 3.506
+        },
+        "sub": {
+          "before": 19.69,
+          "after": 6.82,
+          "speedup": 2.885
+        },
+        "mul": {
+          "before": 105.49,
+          "after": 42.87,
+          "speedup": 2.461
+        },
+        "sqr": {
+          "before": 80.65,
+          "after": 34.3,
+          "speedup": 2.351
+        },
+        "inv": {
+          "before": 56880.82,
+          "after": 21134.24,
+          "speedup": 2.691
+        },
+        "sqrt": {
+          "before": 48533.08,
+          "after": 18880.94,
+          "speedup": 2.57
+        },
+        "exp3div4": {
+          "before": 56487.7,
+          "after": 21067.68,
+          "speedup": 2.681
+        },
+        "is_square": {
+          "before": 4162.49,
+          "after": 4223.57,
+          "speedup": 0.986
+        },
+        "div3": {
+          "before": 57606.02,
+          "after": 45.51,
+          "speedup": 1265.899
+        },
+        "fp2_mul": {
+          "before": 442.29,
+          "after": 157.31,
+          "speedup": 2.812
+        },
+        "fp2_sqr": {
+          "before": 286.87,
+          "after": 103.44,
+          "speedup": 2.773
+        }
+      }
+    }
+  ]
+}

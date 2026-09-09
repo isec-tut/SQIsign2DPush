@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-11" cr libsqisign_hd_lvl5.a CMakeFiles/sqisign_hd_lvl5.dir/__/lvlx/hd.c.o CMakeFiles/sqisign_hd_lvl5.dir/__/lvlx/theta_structure.c.o CMakeFiles/sqisign_hd_lvl5.dir/__/lvlx/theta_isogenies.c.o
-"/usr/bin/gcc-ranlib-11" libsqisign_hd_lvl5.a

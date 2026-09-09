@@ -9,13 +9,6 @@
 // uint64_t measure_three_EVAL_ker = 0;
 // uint64_t measure_three_EVAL_pts = 0;
 
-static inline void AC_to_A24(ec_point_t *A24, ec_curve_t const *E) {
-  // A24 = (A+2C : 4C)
-  fp2_add(&A24->z, &E->C, &E->C);
-  fp2_add(&A24->x, &E->A, &A24->z);
-  fp2_add(&A24->z, &A24->z, &A24->z);
-}
-
 static inline void AC_to_A24minus(ec_point_t *A24minus, ec_curve_t const *E) {
   // Input:  curve constant (A:C)
   // Output: A24minus = (A-2C : 4C)

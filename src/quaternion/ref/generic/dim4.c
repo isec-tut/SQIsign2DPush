@@ -33,6 +33,27 @@ void ibz_vec_4_set(ibz_vec_4_t *vec, int64_t coord0, int64_t coord1, int64_t coo
     ibz_set(&((*vec)[3]),coord3);
 }
 
+void ibz_vec_4_add(ibz_vec_4_t *res, const ibz_vec_4_t *a,
+                   const ibz_vec_4_t *b) {
+    for (int i = 0; i < 4; i++) {
+        ibz_add(&((*res)[i]), &((*a)[i]), &((*b)[i]));
+    }
+}
+
+void ibz_vec_4_sub(ibz_vec_4_t *res, const ibz_vec_4_t *a,
+                   const ibz_vec_4_t *b) {
+    for (int i = 0; i < 4; i++) {
+        ibz_sub(&((*res)[i]), &((*a)[i]), &((*b)[i]));
+    }
+}
+
+void ibz_vec_4_scalar_mul(ibz_vec_4_t *prod, const ibz_t *scalar,
+                          const ibz_vec_4_t *vec) {
+    for (int i = 0; i < 4; i++) {
+        ibz_mul(&((*prod)[i]), &((*vec)[i]), scalar);
+    }
+}
+
 void ibz_vec_4_copy(ibz_vec_4_t *new, const ibz_vec_4_t  *vec){
     for (int i = 0; i <4; i++){
         ibz_copy(&((*new)[i]),&((*vec)[i]));

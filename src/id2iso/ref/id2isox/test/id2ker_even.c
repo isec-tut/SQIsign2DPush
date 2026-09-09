@@ -8,7 +8,7 @@ static void random_scalar(ibz_t *k) {
 }
 
 // defined in src/klpt/ref/generic/tools.c
-int represent_integer(quat_alg_elem_t *gamma, ibz_t *n_gamma,
+int represent_integer(quat_alg_elem_t *gamma, const ibz_t *n_gamma,
                       const quat_alg_t *Bpoo);
 
 // I will have norm dividing 2^f, whereas J will have norm dividing T

@@ -24,8 +24,7 @@ bool fp2_isone(fp2_t a){
 
 void fp2_print(char *name, fp2_t const a){
     fp2_t b;
-    fp2_set(&b, 1);
-    fp2_mul(&b, &b, &a);
+    fp2_frommont(&b, &a);
     printf("%s = 0x", name);
     for(int i = NWORDS_FIELD - 1; i >=0; i--)
         printf("%016" PRIx64, b.re[i]);

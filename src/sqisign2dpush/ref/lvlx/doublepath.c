@@ -24,6 +24,18 @@
     }                                                                          \
   } while (0)
 
+#define KEYGEN_TIME_CATEGORY(category, ...)                                    \
+  do {                                                                         \
+    if (timings) {                                                             \
+      clock_t _ts = clock();                                                   \
+      __VA_ARGS__;                                                             \
+      timings->category +=                                                     \
+          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;             \
+    } else {                                                                   \
+      __VA_ARGS__;                                                             \
+    }                                                                          \
+  } while (0)
+
 // typedef struct {
 //   uint64_t add;
 //   uint64_t sqr;
@@ -53,8 +65,7 @@ static inline void print_deg(ec_degree_odd_t deg) {
 
 void fp2_print(char *name, fp2_t const a) {
   fp2_t b;
-  fp2_set(&b, 1);
-  fp2_mul(&b, &b, &a);
+  fp2_frommont(&b, &a);
   printf("%s = 0x", name);
   for (int i = NWORDS_FIELD - 1; i >= 0; i--)
     printf("%016" PRIx64, b.re[i]);
@@ -135,28 +146,37 @@ static int test_point_order_odd_minus(const ec_point_t *P,
 }
 
 void quat_to_isog_power_of_two(ec_isog_even_t *isog, ibz_vec_2_t *ker_dlog,
-                               const quat_alg_elem_t *gamma) {
+                               const quat_alg_elem_t *gamma,
+                               keygen_timings_t *timings) {
   quat_left_ideal_t ideal;
   quat_left_ideal_init(&ideal);
 
-  quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_TWO, &MAXORD_O0,
-                                    &QUATALG_PINFTY);
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat,
+    quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_TWO, &MAXORD_O0,
+                                      &QUATALG_PINFTY));
 
-  id2iso_ideal_to_isogeny_even_dlogs(isog, ker_dlog, &ideal);
+  id2iso_ideal_to_isogeny_even_dlogs_timed(
+      isog, ker_dlog, &ideal,
+      timings ? &timings->ms_keygen_quat : NULL,
+      timings ? &timings->ms_keygen_ec_non_isog : NULL);
   quat_left_ideal_finalize(&ideal);
   return;
 }
 
-void quat_to_kernel_power_of_two(ibz_vec_2_t *ker_dlog, const quat_alg_elem_t *gamma){
+void quat_to_kernel_power_of_two(ibz_vec_2_t *ker_dlog,
+                                 const quat_alg_elem_t *gamma,
+                                 keygen_timings_t *timings){
   quat_left_ideal_t ideal;
   quat_left_ideal_init(&ideal);
 
-  quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_TWO, &MAXORD_O0,
-                                    &QUATALG_PINFTY);
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat,
+    quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_TWO, &MAXORD_O0,
+                                      &QUATALG_PINFTY));
   ibz_vec_2_t vec;
   ibz_vec_2_init(&vec);
 
-  id2iso_ideal_to_kernel_dlogs_even(&vec, &ideal);
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat,
+    id2iso_ideal_to_kernel_dlogs_even(&vec, &ideal));
 
   ibz_copy(&(*ker_dlog)[0], &vec[0]);
   ibz_copy(&(*ker_dlog)[1], &vec[1]);
@@ -167,16 +187,20 @@ void quat_to_kernel_power_of_two(ibz_vec_2_t *ker_dlog, const quat_alg_elem_t *g
 }
 
 void quat_to_isog_power_of_three(ec_isog_odd_t *isog, ibz_vec_2_t *ker_dlog,
-                                 const quat_alg_elem_t *gamma) {
+                                 const quat_alg_elem_t *gamma,
+                                 keygen_timings_t *timings) {
   quat_left_ideal_t ideal;
   quat_left_ideal_init(&ideal);
 
-  quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_THREE, &MAXORD_O0,
-                                    &QUATALG_PINFTY);
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat,
+    quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_THREE, &MAXORD_O0,
+                                      &QUATALG_PINFTY));
 
   assert(ibz_cmp(&(ideal.norm), &POWER_OF_THREE) == 0);
-  id2iso_ideal_to_isogeny_odd_plus(isog, ker_dlog, &CURVE_E0, &BASIS_ODD_PLUS,
-                                   &ideal);
+  id2iso_ideal_to_isogeny_odd_plus_timed(
+      isog, ker_dlog, &CURVE_E0, &BASIS_ODD_PLUS, &ideal,
+      timings ? &timings->ms_keygen_quat : NULL,
+      timings ? &timings->ms_keygen_ec_non_isog : NULL);
 
   assert(fp2_is_zero(&((isog->ker_minus).z)));
   assert(!fp2_is_zero(&((isog->ker_plus).z)));
@@ -186,37 +210,43 @@ void quat_to_isog_power_of_three(ec_isog_odd_t *isog, ibz_vec_2_t *ker_dlog,
 }
 
 void quat_to_kernel_power_of_three(ibz_vec_2_t *ker_dlog,
-                                   const quat_alg_elem_t *gamma) {
+                                   const quat_alg_elem_t *gamma,
+                                   keygen_timings_t *timings) {
   quat_left_ideal_t ideal;
   quat_left_ideal_init(&ideal);
 
-  quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_THREE, &MAXORD_O0,
-                                    &QUATALG_PINFTY);
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat,
+    quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_THREE, &MAXORD_O0,
+                                      &QUATALG_PINFTY));
   ibz_vec_2_t vec;
   ibz_vec_2_init(&vec);
   ec_degree_odd_t deg;
 
-  id2iso_ideal_to_kernel_dlogs_odd(&vec, &deg, &ideal);
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat,
+    id2iso_ideal_to_kernel_dlogs_odd(&vec, &deg, &ideal));
 
   ibz_t tmp;
   ibz_init(&tmp);
 
-  // multiply out unnecessary cofactor from T-torsion basis
-  // assert(sizeof(deg) / sizeof(*deg) ==
-  //        sizeof(TORSION_ODD_PRIMEPOWERS) / sizeof(*TORSION_ODD_PRIMEPOWERS));
-  for (size_t i = 0; i < sizeof(deg) / sizeof(*deg); ++i) {
-    assert(deg[i] <= TORSION_ODD_POWERS[i]);
-    if (deg[i] == TORSION_ODD_POWERS[i])
-      continue;
-    ibz_set(&tmp, TORSION_ODD_PRIMES[i]);
-    ibz_pow(&tmp, &tmp, TORSION_ODD_POWERS[i] - deg[i]);
-    ibz_mul(&vec[0], &vec[0], &tmp);
-    ibz_mul(&vec[1], &vec[1], &tmp);
-  }
-  ibz_mod(&tmp, &vec[0], &TORSION_ODD_PLUS);
-  ibz_copy(&(*ker_dlog)[0], &tmp);
-  ibz_mod(&tmp, &vec[1], &TORSION_ODD_PLUS);
-  ibz_copy(&(*ker_dlog)[1], &tmp);
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat, {
+    // multiply out unnecessary cofactor from T-torsion basis
+    // assert(sizeof(deg) / sizeof(*deg) ==
+    //        sizeof(TORSION_ODD_PRIMEPOWERS) / sizeof(*TORSION_ODD_PRIMEPOWERS));
+    for (size_t i = 0; i < sizeof(deg) / sizeof(*deg); ++i) {
+      assert(deg[i] <= TORSION_ODD_POWERS[i]);
+      if (deg[i] == TORSION_ODD_POWERS[i])
+        continue;
+      ibz_set(&tmp, TORSION_ODD_PRIMES[i]);
+      ibz_pow(&tmp, &tmp, TORSION_ODD_POWERS[i] - deg[i]);
+      ibz_mul(&vec[0], &vec[0], &tmp);
+      ibz_mul(&vec[1], &vec[1], &tmp);
+    }
+    ibz_mod(&tmp, &vec[0], &TORSION_ODD_PLUS);
+    ibz_copy(&(*ker_dlog)[0], &tmp);
+    ibz_mod(&tmp, &vec[1], &TORSION_ODD_PLUS);
+    ibz_copy(&(*ker_dlog)[1], &tmp);
+
+  });
 
   ibz_finalize(&tmp);
   ibz_vec_2_finalize(&vec);
@@ -309,22 +339,26 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   ibz_init(&pow_three_square);
   quat_alg_elem_init(&gamma_conj);
 
+  clock_t t_start, t_end;
+
   // FIND AN ENDOMORPHISM OF NORM n_gamma = (POWER_OF_TWO*POWER_OF_THREE)^2
-  ibz_mul(&pow_two_square, &POWER_OF_TWO, &POWER_OF_TWO);
-  ibz_mul(&pow_three_square, &POWER_OF_THREE, &POWER_OF_THREE);
-  ibz_mul(&n_gamma, &pow_two_square, &pow_three_square);
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat, {
+    ibz_mul(&pow_two_square, &POWER_OF_TWO, &POWER_OF_TWO);
+    ibz_mul(&pow_three_square, &POWER_OF_THREE, &POWER_OF_THREE);
+    ibz_mul(&n_gamma, &pow_two_square, &pow_three_square);
+  });
 
   if (verbose) {
     TAC("represent_integer in");
   }
   int found;
-  if (timings) {
-    clock_t _ts = clock();
-    found = represent_integer(gamma, &n_gamma, &QUATALG_PINFTY);
-    timings->ms_dp_represent_integer +=
-        (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-  } else {
-    found = represent_integer(gamma, &n_gamma, &QUATALG_PINFTY);
+  if (timings)
+    t_start = clock();
+  found = represent_integer(gamma, &n_gamma, &QUATALG_PINFTY);
+  if (timings){
+    t_end = clock();
+    timings->ms_keygen_quat +=
+        (float)(t_end - t_start) * 1000.f / (float)CLOCKS_PER_SEC;
   }
   assert(found);
   if (verbose) {
@@ -346,25 +380,22 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
 #endif
 
   // COMPUTE THE FIRST HALF OF GAMMA AND OF ITS DUAL
-  quat_alg_conj(&gamma_conj, gamma);
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat, quat_alg_conj(&gamma_conj, gamma));
 
-  DOUBLEPATH_TIME_FIELD(ms_dp_lideal_create,
+  KEYGEN_TIME_CATEGORY(ms_keygen_quat,
     quat_lideal_create_from_primitive(lideal_even, gamma, &pow_two_square,
                                       &MAXORD_O0, &QUATALG_PINFTY);
     quat_lideal_create_from_primitive(lideal_odd, &gamma_conj, &pow_three_square,
                                       &MAXORD_O0, &QUATALG_PINFTY));
 
-  DOUBLEPATH_TIME_FIELD(ms_dp_quat_to_isog_two,
-    quat_to_isog_power_of_two(&primal_two, &dual_two_ker_dlog, gamma));
+  quat_to_isog_power_of_two(&primal_two, &dual_two_ker_dlog, gamma, timings);
   // quat_to_isog_power_of_three(&primal_three, &primal_three_ker_dlog, gamma);
-  DOUBLEPATH_TIME_FIELD(ms_dp_quat_to_kernel_three,
-    quat_to_kernel_power_of_three(&primal_three_ker_dlog, gamma));
+  quat_to_kernel_power_of_three(&primal_three_ker_dlog, gamma, timings);
 
   // quat_to_isog_power_of_two(&dual_two, &dual_two_ker_dlog, &gamma_conj);
-  DOUBLEPATH_TIME_FIELD(ms_dp_quat_to_isog_three,
-    quat_to_isog_power_of_three(&dual_three, &dual_three_ker_dlog, &gamma_conj));
-  DOUBLEPATH_TIME_FIELD(ms_dp_quat_to_kernel_two,
-    quat_to_kernel_power_of_two(&dual_two_ker_dlog, &gamma_conj));
+  quat_to_isog_power_of_three(&dual_three, &dual_three_ker_dlog, &gamma_conj,
+                              timings);
+  quat_to_kernel_power_of_two(&dual_two_ker_dlog, &gamma_conj, timings);
 
   // TODO: if basis_three_image = NULL, then we dont need the image of
   // BASIS_THREE, and it is (slightly?) faster to compute the image of the
@@ -376,17 +407,20 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   copy_point(list_points + 1, &BASIS_THREE.Q);
   copy_point(list_points + 2, &BASIS_THREE.PmQ);
 
-  {
-    clock_t _ts = clock();
-    ec_eval_even(&F1, &primal_two, list_points, 3);
+  if (verbose)
+    TAC("ec_eval_even in");
 
-    if (timings) {
-      float _dt = (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_eval_even += _dt;
-      timings->ms_dp_eval_even1 += _dt;
-      timings->total_isog_length_even += (unsigned long)EXPONENT_TWO;
-    }
+  if (timings)
+    t_start = clock();
+  ec_eval_even(&F1, &primal_two, list_points, 3);
+  if (timings){
+    t_end = clock();
+    timings->ms_keygen_ec_isog +=
+        (float)(t_end - t_start) * 1000.f / (float)CLOCKS_PER_SEC;
   }
+
+  if (verbose)
+    TAC("ec_eval_even out");
 
 
 #ifdef DEBUG
@@ -399,20 +433,19 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   copy_point(&(basis_three.Q), list_points + 1);
   copy_point(&(basis_three.PmQ), list_points + 2);
 
-  DOUBLEPATH_TIME_FIELD(ms_dp_biscalar1,
+  KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
     ec_biscalar_mul_ibz(list_points + 0, &F1, &(primal_three_ker_dlog[0]),
                         &(primal_three_ker_dlog[1]), &basis_three));
-  DOUBLEPATH_TIME_FIELD(ms_dp_isog_init_three,
-    isog_init_three(&primal_three_pushed, &F1, list_points + 0,
-                    EXPONENT_THREE));
+  isog_init_three(&primal_three_pushed, &F1, list_points + 0,
+                    EXPONENT_THREE);
 
   ec_point_t ker_primal_three_pushed_dual;
-  DOUBLEPATH_TIME_FIELD(ms_dp_complete_three_basis,
+  KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
     complete_three_basis(&ker_primal_three_pushed_dual, &primal_three_ker_dlog,
                          &basis_three));
 
   ec_basis_t basis2_F1;
-  DOUBLEPATH_TIME_FIELD(ms_dp_curve_to_basis_2,
+  KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
     (void)ec_curve_to_basis_2f_to_hint(&basis2_F1, &F1,
                                        TORSION_PLUS_EVEN_POWER));
 
@@ -423,19 +456,18 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
 
   if (verbose)
     TAC("ec_eval_three in");
-  {
 
-    clock_t _ts = clock();
-    ec_eval_three(&E1, &primal_three_pushed, push_points, 4);
-
-    if (timings) {
-      float _dt = (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_eval_three += _dt;
-      timings->ms_dp_eval_three1 += _dt;
-      timings->ms_keygen_isog += _dt;
-      timings->total_isog_length_three += (unsigned long)EXPONENT_THREE;
-    }
+  if (timings)
+    t_start = clock();
+  ec_eval_three(&E1, &primal_three_pushed, push_points, 4);
+  if (timings) {
+    t_end = clock();
+    float _dt = (float)(t_end - t_start) * 1000.f / (float)CLOCKS_PER_SEC;
+    timings->ms_keygen_ec_isog += _dt;
   }
+
+  if (verbose)
+    TAC("ec_eval_three out");
 
   ec_basis_t basis2_E1;
   copy_point(&basis2_E1.P, push_points + 0);
@@ -447,37 +479,37 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   copy_point(list_points + 1, &BASIS_EVEN.Q);
   copy_point(list_points + 2, &BASIS_EVEN.PmQ);
 
-  {
+  if (verbose)
+    TAC("ec_eval_three in");
 
-    clock_t _ts = clock();
-    ec_eval_three(&F2, &dual_three, list_points, 3);
-
-    if (timings) {
-      float _dt = (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_eval_three += _dt;
-      timings->ms_dp_eval_three2 += _dt;
-      timings->ms_keygen_isog += _dt;
-      // printf(" ms_eval_three 2: %f\n", _dt);
-      timings->total_isog_length_three += (unsigned long)EXPONENT_THREE;
-    }
+  if (timings)
+    t_start = clock();
+  ec_eval_three(&F2, &dual_three, list_points, 3);
+  if (timings) {
+    t_end = clock();
+    float _dt = (float)(t_end - t_start) * 1000.f / (float)CLOCKS_PER_SEC;
+    timings->ms_keygen_ec_isog += _dt;
   }
+
+  if (verbose)
+    TAC("ec_eval_three out");
 
   copy_point(&(basis_two.P), list_points + 0);
   copy_point(&(basis_two.Q), list_points + 1);
   copy_point(&(basis_two.PmQ), list_points + 2);
 
-  DOUBLEPATH_TIME_FIELD(ms_dp_biscalar2,
+  KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
     ec_biscalar_mul_ibz(list_points + 0, &F2, &(dual_two_ker_dlog[0]),
                         &(dual_two_ker_dlog[1]), &basis_two));
 #ifdef DEBUG
   assert(sqisign2dpush_test_point_order_twof(list_points + 0, &F2));
 #endif
-  DOUBLEPATH_TIME_FIELD(ms_dp_isog_init_two,
-    isog_init_two(&dual_two_pushed, &F2, list_points + 0, EXPONENT_TWO));
+
+  isog_init_two(&dual_two_pushed, &F2, list_points + 0, EXPONENT_TWO);
 
   ec_point_t ker_dual_two_pushed_dual;
 
-  DOUBLEPATH_TIME_FIELD(ms_dp_complete_two_basis,
+  KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
     complete_two_basis(&ker_dual_two_pushed_dual, &dual_two_ker_dlog,
                        &basis_two));
 
@@ -485,25 +517,27 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   assert(sqisign2dpush_test_point_order_twof(&ker_dual_two_pushed_dual, &F2));
 #endif
   ec_basis_t basis3_F2;
-  DOUBLEPATH_TIME_FIELD(ms_dp_curve_to_basis_3,
+  KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
     (void)ec_curve_to_basis_3f_to_hint(&basis3_F2, &F2));
   copy_point(push_points + 0, &basis3_F2.P);
   copy_point(push_points + 1, &basis3_F2.Q);
   copy_point(push_points + 2, &basis3_F2.PmQ);
   copy_point(push_points + 3, &ker_dual_two_pushed_dual);
 
-  {
-    clock_t _ts = clock();
-    ec_eval_even(&E2, &dual_two_pushed, push_points, 4);
-
-    if (timings) {
-      float _dt = (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_eval_even += _dt;
-      timings->ms_dp_eval_even2 += _dt;
-      timings->ms_keygen_isog += _dt;
-      timings->total_isog_length_even += (unsigned long)EXPONENT_TWO;
-    }
+  if (verbose)
+    TAC("ec_eval_even in");
+  
+  if (timings)
+    t_start = clock();
+  ec_eval_even(&E2, &dual_two_pushed, push_points, 4);
+  if (timings) {
+    t_end = clock();
+    float _dt = (float)(t_end - t_start) * 1000.f / (float)CLOCKS_PER_SEC;
+    timings->ms_keygen_ec_isog += _dt;
   }
+
+  if (verbose)
+    TAC("ec_eval_even out");
 
   ec_basis_t basis3_E2;
   copy_point(&basis3_E2.P, push_points + 0);
@@ -523,16 +557,18 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   assert(fp2_is_equal(&j_R, &j_L));
 #endif
   ec_isom_t isom_E1_E2;
-  ec_isomorphism(&isom_E1_E2, &E1, &E2);
+  KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
+    ec_isomorphism(&isom_E1_E2, &E1, &E2));
 
   // PUSH THINGS AROUND TO GET THE 3-PART OF GAMMA_DUAL
   if (basis_two_image) {
     ec_point_t ker_primal_three_pushed_dual_E2;
     copy_point(&ker_primal_three_pushed_dual_E2, &ker_primal_three_pushed_dual);
-    ec_iso_eval(&ker_primal_three_pushed_dual_E2, &isom_E1_E2);
+    KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
+      ec_iso_eval(&ker_primal_three_pushed_dual_E2, &isom_E1_E2));
 
     digit_t a1[NWORDS_ORDER] = {0}, a2[NWORDS_ORDER] = {0};
-    DOUBLEPATH_TIME_FIELD(ms_dp_dlog_3_tate_R,
+    KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
       ec_dlog_3_tate_R(a1, a2, &basis3_E2, &ker_primal_three_pushed_dual_E2,
                        &E2, EXPONENT_THREE));
     ibz_t a1_ibz, a2_ibz;
@@ -542,12 +578,11 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
     ibz_copy_digit_array(&a2_ibz, a2);
 
     ec_point_t ker_dual_three_second_half;
-    DOUBLEPATH_TIME_FIELD(ms_dp_biscalar3,
+    KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
       ec_biscalar_mul_ibz(&ker_dual_three_second_half, &F2, &a1_ibz, &a2_ibz,
                           &basis3_F2));
-    DOUBLEPATH_TIME_FIELD(ms_dp_isog_init_three,
-      isog_init_three(&dual_three_second_half, &F2,
-                      &ker_dual_three_second_half, EXPONENT_THREE));
+    isog_init_three(&dual_three_second_half, &F2,
+                      &ker_dual_three_second_half, EXPONENT_THREE);
 
     copy_point(list_points + 0, &basis_two.P);
     copy_point(list_points + 1, &basis_two.Q);
@@ -555,27 +590,25 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
 
     if (verbose)
       TAC("ec_eval_three in");
-    {
 
-      clock_t _ts = clock();
-      ec_eval_three(&E_final, &dual_three_second_half, list_points, 3);
+    if (timings)
+      t_start = clock();
+    ec_eval_three(&E_final, &dual_three_second_half, list_points, 3);
 
-      if (timings) {
-        float _dt = (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-        timings->ms_eval_three += _dt;
-        timings->ms_dp_eval_three3 += _dt;
-        timings->ms_keygen_isog += _dt;
-        // printf(" ms_eval_three 3: %f\n", _dt);
-        timings->total_isog_length_three += (unsigned long)EXPONENT_THREE;
-      }
+    if (timings) {
+      t_end = clock();
+      float _dt = (float)(t_end - t_start) * 1000.f / (float)CLOCKS_PER_SEC;
+      timings->ms_keygen_ec_isog += _dt;
     }
+
     if (verbose)
       TAC("ec_eval_three out");
 
-    ec_curve_normalize(&E_final, &norm_isom, &E_final);
-    ec_iso_eval(list_points + 0, &norm_isom);
-    ec_iso_eval(list_points + 1, &norm_isom);
-    ec_iso_eval(list_points + 2, &norm_isom);
+    KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
+      ec_curve_normalize(&E_final, &norm_isom, &E_final);
+      ec_iso_eval(list_points + 0, &norm_isom);
+      ec_iso_eval(list_points + 1, &norm_isom);
+      ec_iso_eval(list_points + 2, &norm_isom));
 
     copy_point(&(basis_two_image->P), list_points + 0);
     copy_point(&(basis_two_image->Q), list_points + 1);
@@ -594,11 +627,12 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
     // PUSH THINGS AROUND TO GET THE 2-PART OF GAMMA
     ec_point_t ker_dual_two_pushed_dual_E1;
     copy_point(&ker_dual_two_pushed_dual_E1, &ker_dual_two_pushed_dual);
-    ec_iso_inv(&isom_E1_E2);
-    ec_iso_eval(&ker_dual_two_pushed_dual_E1, &isom_E1_E2);
+    KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
+      ec_iso_inv(&isom_E1_E2);
+      ec_iso_eval(&ker_dual_two_pushed_dual_E1, &isom_E1_E2));
 
     digit_t a3[NWORDS_ORDER] = {0}, a4[NWORDS_ORDER] = {0};
-    DOUBLEPATH_TIME_FIELD(ms_dp_dlog_2_tate_R,
+    KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
       ec_dlog_2_tate_R(a3, a4, &basis2_E1, &ker_dual_two_pushed_dual_E1, &E1,
                        EXPONENT_TWO));
     ibz_t a3_ibz, a4_ibz;
@@ -608,35 +642,37 @@ void doublepath(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
     ibz_copy_digit_array(&a4_ibz, a4);
 
     ec_point_t ker_primal_two_second_half;
-    DOUBLEPATH_TIME_FIELD(ms_dp_biscalar4,
+    KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
       ec_biscalar_mul_ibz(&ker_primal_two_second_half, &F1, &a3_ibz, &a4_ibz,
                           &basis2_F1));
 
-    DOUBLEPATH_TIME_FIELD(ms_dp_isog_init_two,
-      isog_init_two(&primal_two_second_half, &F1,
-                    &ker_primal_two_second_half, EXPONENT_TWO));
+    isog_init_two(&primal_two_second_half, &F1,
+                    &ker_primal_two_second_half, EXPONENT_TWO);
 
     copy_point(list_points + 0, &basis_three.P);
     copy_point(list_points + 1, &basis_three.Q);
     copy_point(list_points + 2, &basis_three.PmQ);
 
-    {
-      clock_t _ts = clock();
-      ec_eval_even(&E_final, &primal_two_second_half, list_points, 3);
+    if (verbose)
+      TAC("ec_eval_even in");
 
-      if (timings) {
-        float _dt = (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-        timings->ms_eval_even += _dt;
-        timings->ms_dp_eval_even3 += _dt;
-        timings->ms_keygen_isog += _dt;
-        timings->total_isog_length_even += (unsigned long)EXPONENT_TWO;
-      }
+    if (timings)
+      t_start = clock();
+    ec_eval_even(&E_final, &primal_two_second_half, list_points, 3);
+    if (timings) {
+      t_end = clock();
+      float _dt = (float)(t_end - t_start) * 1000.f / (float)CLOCKS_PER_SEC;
+      timings->ms_keygen_ec_isog += _dt;
     }
 
-    ec_curve_normalize(&E_final, &norm_isom, &E_final);
-    ec_iso_eval(list_points + 0, &norm_isom);
-    ec_iso_eval(list_points + 1, &norm_isom);
-    ec_iso_eval(list_points + 2, &norm_isom);
+    if (verbose)
+      TAC("ec_eval_even out");
+
+    KEYGEN_TIME_CATEGORY(ms_keygen_ec_non_isog,
+      ec_curve_normalize(&E_final, &norm_isom, &E_final);
+      ec_iso_eval(list_points + 0, &norm_isom);
+      ec_iso_eval(list_points + 1, &norm_isom);
+      ec_iso_eval(list_points + 2, &norm_isom));
 
     copy_point(&(basis_three_image->P), list_points + 0);
     copy_point(&(basis_three_image->Q), list_points + 1);
@@ -678,20 +714,19 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
 
   ibz_t n_gamma, pow_two_square, pow_three_square;
   quat_alg_elem_t gamma_conj;
-  ec_isog_even_t dual_two, dual_two_pushed, dual_two_pushed_dual;
-  ec_isog_odd_t primal_three, primal_three_pushed, primal_three_pushed_dual;
+  ec_isog_even_t dual_two_pushed;
+  ec_isog_odd_t primal_three_pushed;
   ec_point_t list_points[3];
-  ec_point_t push_points[4];
-  ec_curve_t F1, E1, F2, E2, F2_alt, F1_alt, E_final;
-  ec_basis_t basis_two, basis_three;
+  ec_point_t push_points[3];
+  ec_curve_t F1, E1, F2, E2, E_final;
+  ec_basis_t basis_two;
   ec_isom_t norm_isom;
-  ec_isog_even_t primal_two, primal_two_second_half;
+  ec_isog_even_t primal_two;
   ec_isog_odd_t dual_three, dual_three_second_half;
 
-  ibz_vec_2_t dual_two_ker_dlog, primal_two_ker_dlog, primal_three_ker_dlog,
+  ibz_vec_2_t dual_two_ker_dlog, primal_three_ker_dlog,
       dual_three_ker_dlog;
   ibz_vec_2_init(&dual_two_ker_dlog);
-  ibz_vec_2_init(&primal_two_ker_dlog);
   ibz_vec_2_init(&primal_three_ker_dlog);
   ibz_vec_2_init(&dual_three_ker_dlog);
 
@@ -701,14 +736,16 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   quat_alg_elem_init(&gamma_conj);
 
   // FIND AN ENDOMORPHISM OF NORM n_gamma = (POWER_OF_TWO*POWER_OF_THREE)^2
-  ibz_mul(&pow_two_square, &POWER_OF_TWO, &POWER_OF_TWO);
-  ibz_mul(&pow_three_square, &POWER_OF_THREE, &POWER_OF_THREE);
-  ibz_mul(&n_gamma, &pow_two_square, &pow_three_square);
+  DOUBLEPATH_TIME_FIELD(ms_sign_quat, {
+    ibz_mul(&pow_two_square, &POWER_OF_TWO, &POWER_OF_TWO);
+    ibz_mul(&pow_three_square, &POWER_OF_THREE, &POWER_OF_THREE);
+    ibz_mul(&n_gamma, &pow_two_square, &pow_three_square);
+  });
 
   if (verbose)
     TAC("represent_integer in");
   int found;
-  DOUBLEPATH_TIME_FIELD(ms_fc_represent_integer,
+  DOUBLEPATH_TIME_FIELD(ms_sign_quat,
                         found =
                             represent_integer(gamma, &n_gamma, &QUATALG_PINFTY));
   assert(found);
@@ -730,9 +767,10 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
 #endif
 
   // COMPUTE THE FIRST HALF OF GAMMA AND OF ITS DUAL
-  quat_alg_conj(&gamma_conj, gamma);
+  DOUBLEPATH_TIME_FIELD(ms_sign_quat,
+                        quat_alg_conj(&gamma_conj, gamma));
 
-  DOUBLEPATH_TIME_FIELD(ms_fc_lideal_create, {
+  DOUBLEPATH_TIME_FIELD(ms_sign_quat, {
     quat_lideal_create_from_primitive(lideal_even, gamma, &pow_two_square,
                                       &MAXORD_O0, &QUATALG_PINFTY);
     quat_lideal_create_from_primitive(lideal_odd, &gamma_conj,
@@ -740,148 +778,26 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
                                       &QUATALG_PINFTY);
   });
 
-  DOUBLEPATH_TIME_FIELD(ms_fc_quat_to_isog_two, {
-    quat_left_ideal_t ideal;
-    quat_left_ideal_init(&ideal);
+  // Use the same disjoint coefficient/point timings as key generation.
+  keygen_timings_t conversion_timings = {0};
+  keygen_timings_t *conversion = timings ? &conversion_timings : NULL;
+  quat_to_isog_power_of_two(&primal_two, &dual_two_ker_dlog, gamma, conversion);
+  quat_to_kernel_power_of_three(&primal_three_ker_dlog, gamma, conversion);
+  quat_to_isog_power_of_three(&dual_three, &dual_three_ker_dlog,
+                             &gamma_conj, conversion);
+  quat_to_kernel_power_of_two(&dual_two_ker_dlog, &gamma_conj, conversion);
+  if (timings) {
+    timings->ms_sign_quat += conversion_timings.ms_keygen_quat;
+    timings->ms_sign_ec_non_isog += conversion_timings.ms_keygen_ec_non_isog;
+  }
 
-    clock_t _ts = clock();
-    quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_TWO,
-                                      &MAXORD_O0, &QUATALG_PINFTY);
-    if (timings) {
-      timings->ms_fc_quat_to_quat +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    _ts = clock();
-    id2iso_ideal_to_isogeny_even_dlogs(&primal_two, &dual_two_ker_dlog,
-                                       &ideal);
-    if (timings) {
-      timings->ms_fc_quat_to_ec +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    quat_left_ideal_finalize(&ideal);
-  });
-  // quat_to_isog_power_of_three(&primal_three, &primal_three_ker_dlog, gamma);
-  DOUBLEPATH_TIME_FIELD(ms_fc_quat_to_kernel_three, {
-    quat_left_ideal_t ideal;
-    quat_left_ideal_init(&ideal);
-
-    clock_t _ts = clock();
-    quat_lideal_create_from_primitive(&ideal, gamma, &POWER_OF_THREE,
-                                      &MAXORD_O0, &QUATALG_PINFTY);
-    if (timings) {
-      timings->ms_fc_quat_to_quat +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    ibz_vec_2_t vec;
-    ibz_vec_2_init(&vec);
-    ec_degree_odd_t deg;
-    _ts = clock();
-    id2iso_ideal_to_kernel_dlogs_odd(&vec, &deg, &ideal);
-    if (timings) {
-      timings->ms_fc_quat_to_quat +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    ibz_t tmp;
-    ibz_init(&tmp);
-    _ts = clock();
-    for (size_t i = 0; i < sizeof(deg) / sizeof(*deg); ++i) {
-      assert(deg[i] <= TORSION_ODD_POWERS[i]);
-      if (deg[i] == TORSION_ODD_POWERS[i])
-        continue;
-      ibz_set(&tmp, TORSION_ODD_PRIMES[i]);
-      ibz_pow(&tmp, &tmp, TORSION_ODD_POWERS[i] - deg[i]);
-      ibz_mul(&vec[0], &vec[0], &tmp);
-      ibz_mul(&vec[1], &vec[1], &tmp);
-    }
-    ibz_mod(&tmp, &vec[0], &TORSION_ODD_PLUS);
-    ibz_copy(&primal_three_ker_dlog[0], &tmp);
-    ibz_mod(&tmp, &vec[1], &TORSION_ODD_PLUS);
-    ibz_copy(&primal_three_ker_dlog[1], &tmp);
-    if (timings) {
-      timings->ms_fc_quat_to_other +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    ibz_finalize(&tmp);
-    ibz_vec_2_finalize(&vec);
-    quat_left_ideal_finalize(&ideal);
-  });
-
-  // quat_to_isog_power_of_two(&dual_two, &dual_two_ker_dlog, &gamma_conj);
-  DOUBLEPATH_TIME_FIELD(ms_fc_quat_to_isog_three, {
-    quat_left_ideal_t ideal;
-    quat_left_ideal_init(&ideal);
-
-    clock_t _ts = clock();
-    quat_lideal_create_from_primitive(&ideal, &gamma_conj, &POWER_OF_THREE,
-                                      &MAXORD_O0, &QUATALG_PINFTY);
-    if (timings) {
-      timings->ms_fc_quat_to_quat +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    assert(ibz_cmp(&(ideal.norm), &POWER_OF_THREE) == 0);
-    _ts = clock();
-    id2iso_ideal_to_isogeny_odd_plus(&dual_three, &dual_three_ker_dlog,
-                                     &CURVE_E0, &BASIS_ODD_PLUS, &ideal);
-    if (timings) {
-      timings->ms_fc_quat_to_ec +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    assert(fp2_is_zero(&((dual_three.ker_minus).z)));
-    assert(!fp2_is_zero(&((dual_three.ker_plus).z)));
-    quat_left_ideal_finalize(&ideal);
-  });
-  DOUBLEPATH_TIME_FIELD(ms_fc_quat_to_kernel_two, {
-    quat_left_ideal_t ideal;
-    quat_left_ideal_init(&ideal);
-
-    clock_t _ts = clock();
-    quat_lideal_create_from_primitive(&ideal, &gamma_conj, &POWER_OF_TWO,
-                                      &MAXORD_O0, &QUATALG_PINFTY);
-    if (timings) {
-      timings->ms_fc_quat_to_quat +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    ibz_vec_2_t vec;
-    ibz_vec_2_init(&vec);
-    _ts = clock();
-    id2iso_ideal_to_kernel_dlogs_even(&vec, &ideal);
-    if (timings) {
-      timings->ms_fc_quat_to_quat +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    _ts = clock();
-    ibz_copy(&dual_two_ker_dlog[0], &vec[0]);
-    ibz_copy(&dual_two_ker_dlog[1], &vec[1]);
-    if (timings) {
-      timings->ms_fc_quat_to_other +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-
-    ibz_vec_2_finalize(&vec);
-    quat_left_ideal_finalize(&ideal);
-  });
-
-  // TODO: if basis_three_image = NULL, then we dont need the image of
-  // BASIS_THREE, and it is (slightly?) faster to compute the image of the
-  // following two points instead copy_point(list_points + 0,
-  // &(primal_three.ker_plus)); complete_three_basis_E0(list_points + 1,
-  // &primal_three_ker_dlog);
-
-  DOUBLEPATH_TIME_FIELD(ms_fc_biscalar1,
+  // Push the first half of gamma through the two-power isogeny.
+  DOUBLEPATH_TIME_FIELD(ms_sign_ec_non_isog,
                         ec_biscalar_mul_ibz(
                             list_points + 0, &CURVE_E0,
                             &(primal_three_ker_dlog[0]),
                             &(primal_three_ker_dlog[1]), &BASIS_THREE));
-  DOUBLEPATH_TIME_FIELD(ms_fc_complete_three_basis,
+  DOUBLEPATH_TIME_FIELD(ms_sign_ec_non_isog,
                         complete_three_basis(list_points + 1,
                                              &primal_three_ker_dlog,
                                              &BASIS_THREE));
@@ -890,20 +806,13 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
     clock_t _t_isog = clock();
     ec_eval_even(&F1, &primal_two, list_points, 2);
     if (timings) {
-      timings->ms_commit_isog +=
-          (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_fc_eval_even1 +=
+      timings->ms_sign_isog +=
           (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
     }
   }
-  if (timings) {
-    timings->total_isog_length_even_commit += (unsigned long)EXPONENT_TWO;
-  }
-
 #ifdef DEBUG
   assert(sqisign2dpush_test_point_order_threef(list_points + 0, &F1));
   assert(sqisign2dpush_test_point_order_threef(list_points + 1, &F1));
-  assert(sqisign2dpush_test_point_order_threef(list_points + 2, &F1));
 #endif
 
   isog_init_three(&primal_three_pushed, &F1, list_points + 0, EXPONENT_THREE);
@@ -916,15 +825,9 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
     ec_eval_three(&E1, &primal_three_pushed, &ker_primal_three_pushed_dual,
                   1); // point generates the dual of primal_three_pushed
     if (timings) {
-      timings->ms_commit_isog +=
-          (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_fc_eval_three1 +=
+      timings->ms_sign_isog +=
           (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
     }
-  }
-
-  if (timings) {
-    timings->total_isog_length_three_commit += (unsigned long)EXPONENT_THREE;
   }
 
   copy_point(list_points + 0, &BASIS_EVEN.P);
@@ -935,15 +838,9 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
     clock_t _t_isog = clock();
     ec_eval_three(&F2, &dual_three, list_points, 3);
     if (timings) {
-      timings->ms_commit_isog +=
-          (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_fc_eval_three2 +=
+      timings->ms_sign_isog +=
           (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
     }
-  }
-
-  if (timings) {
-    timings->total_isog_length_three_commit += (unsigned long)EXPONENT_THREE;
   }
 
   copy_curve(E_com_mid, &F2);
@@ -952,12 +849,11 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   copy_point(&(basis_two_mid->Q), list_points + 1);
   copy_point(&(basis_two_mid->PmQ), list_points + 2);
 
-
   copy_point(&(basis_two.P), list_points + 0);
   copy_point(&(basis_two.Q), list_points + 1);
   copy_point(&(basis_two.PmQ), list_points + 2);
 
-  DOUBLEPATH_TIME_FIELD(ms_fc_biscalar2,
+  DOUBLEPATH_TIME_FIELD(ms_sign_ec_non_isog,
                         ec_biscalar_mul_ibz(list_points + 0, &F2,
                                             &(dual_two_ker_dlog[0]),
                                             &(dual_two_ker_dlog[1]),
@@ -965,7 +861,7 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   isog_init_two(&dual_two_pushed, &F2, list_points + 0, EXPONENT_TWO);
 
   ec_basis_t basis3_F2;
-  DOUBLEPATH_TIME_FIELD(ms_fc_curve_to_basis_3,
+  DOUBLEPATH_TIME_FIELD(ms_sign_ec_non_isog,
                         (void)ec_curve_to_basis_3f_to_hint(&basis3_F2, &F2));
   copy_point(push_points + 0, &basis3_F2.P);
   copy_point(push_points + 1, &basis3_F2.Q);
@@ -975,15 +871,9 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
     clock_t _t_isog = clock();
     ec_eval_even(&E2, &dual_two_pushed, push_points, 3);
     if (timings) {
-      timings->ms_commit_isog +=
-          (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_fc_eval_even2 +=
+      timings->ms_sign_isog +=
           (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
     }
-  }
-
-  if (timings) {
-    timings->total_isog_length_even_commit += (unsigned long)EXPONENT_TWO;
   }
 
   ec_basis_t basis3_E2;
@@ -991,7 +881,7 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   copy_point(&basis3_E2.Q, push_points + 1);
   copy_point(&basis3_E2.PmQ, push_points + 2);
 
-// FIRST HALF OF GAMMA AND FIRST HALF OF ITS DUAL HAVE ISOMORPHIC TARGETS
+  // The first halves of gamma and its dual have isomorphic targets.
 #ifndef NDEBUG
   fp2_t j_R, j_L;
   ec_j_inv(&j_R, &E1);
@@ -999,16 +889,18 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   assert(fp2_is_equal(&j_R, &j_L));
 #endif
   ec_isom_t isom_E1_E2;
-  ec_isomorphism(&isom_E1_E2, &E1, &E2);
+  DOUBLEPATH_TIME_FIELD(ms_sign_ec_non_isog,
+                        ec_isomorphism(&isom_E1_E2, &E1, &E2));
 
   // PUSH THINGS AROUND TO GET THE 3-PART OF GAMMA_DUAL
   if (basis_two_image) {
     ec_point_t ker_primal_three_pushed_dual_E2;
     copy_point(&ker_primal_three_pushed_dual_E2, &ker_primal_three_pushed_dual);
-    ec_iso_eval(&ker_primal_three_pushed_dual_E2, &isom_E1_E2);
+    DOUBLEPATH_TIME_FIELD(ms_sign_ec_non_isog,
+        ec_iso_eval(&ker_primal_three_pushed_dual_E2, &isom_E1_E2));
 
     digit_t a1[NWORDS_ORDER] = {0}, a2[NWORDS_ORDER] = {0};
-    DOUBLEPATH_TIME_FIELD(ms_fc_dlog_3_tate_R,
+    DOUBLEPATH_TIME_FIELD(ms_sign_ec_non_isog,
                           ec_dlog_3_tate_R(
                               a1, a2, &basis3_E2,
                               &ker_primal_three_pushed_dual_E2, &E2,
@@ -1020,7 +912,7 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
     ibz_copy_digit_array(&a2_ibz, a2);
 
     ec_point_t ker_dual_three_second_half;
-    DOUBLEPATH_TIME_FIELD(ms_fc_biscalar3,
+    DOUBLEPATH_TIME_FIELD(ms_sign_ec_non_isog,
                           ec_biscalar_mul_ibz(&ker_dual_three_second_half, &F2,
                                               &a1_ibz, &a2_ibz, &basis3_F2));
     isog_init_three(&dual_three_second_half, &F2, &ker_dual_three_second_half,
@@ -1034,31 +926,25 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
       clock_t _t_isog = clock();
       ec_eval_three(&E_final, &dual_three_second_half, list_points, 3);
       if (timings) {
-      timings->ms_commit_isog +=
-            (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-        timings->ms_fc_eval_three3 +=
+        timings->ms_sign_isog +=
             (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
       }
     }
 
-    if (timings) {
-      timings->total_isog_length_three_commit += (unsigned long)EXPONENT_THREE;
-    }
-
     copy_point(kernel_iso_three2, &ker_dual_three_second_half);
-    // point_print("kernel_iso_three2", *kernel_iso_three2);
 
-    ec_curve_normalize(&E_final, &norm_isom, &E_final);
-    ec_iso_eval(list_points + 0, &norm_isom);
-    ec_iso_eval(list_points + 1, &norm_isom);
-    ec_iso_eval(list_points + 2, &norm_isom);
+    DOUBLEPATH_TIME_FIELD(ms_sign_ec_non_isog, {
+      ec_curve_normalize(&E_final, &norm_isom, &E_final);
+      ec_iso_eval(list_points + 0, &norm_isom);
+      ec_iso_eval(list_points + 1, &norm_isom);
+      ec_iso_eval(list_points + 2, &norm_isom);
+    });
 
     copy_point(&(basis_two_image->P), list_points + 0);
     copy_point(&(basis_two_image->Q), list_points + 1);
     copy_point(&(basis_two_image->PmQ), list_points + 2);
 
     if (E_target) {
-      // TODO: normalize E_target with ec_curve_normalize
       copy_curve(E_target, &E_final);
     }
 
@@ -1071,7 +957,6 @@ int fastcommit(quat_alg_elem_t *gamma, quat_left_ideal_t *lideal_even,
   ibz_finalize(&pow_two_square);
   ibz_finalize(&pow_three_square);
   ibz_vec_2_finalize(&dual_two_ker_dlog);
-  ibz_vec_2_finalize(&primal_two_ker_dlog);
   ibz_vec_2_finalize(&primal_three_ker_dlog);
   ibz_vec_2_finalize(&dual_three_ker_dlog);
   return 1;

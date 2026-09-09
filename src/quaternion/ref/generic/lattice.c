@@ -183,6 +183,31 @@ void quat_lattice_mul(quat_lattice_t *res, const quat_lattice_t *lat1, const qua
     ibz_finalize(&r);
 }
 
+void quat_lattice_alg_elem_mul(quat_lattice_t *res,
+                               const quat_lattice_t *lat,
+                               const quat_alg_elem_t *alpha,
+                               const quat_alg_t *alg) {
+    ibz_mat_4x4_t rightmul;
+    quat_lattice_t product;
+
+    ibz_mat_4x4_init(&rightmul);
+    quat_lattice_init(&product);
+
+    /* The columns of a lattice basis are algebra elements.  rightmul maps a
+     * coordinate column x to x * alpha, with alpha's denominator kept in the
+     * lattice denominator below. */
+    quat_alg_rightmul_mat(&rightmul, alpha, alg);
+    ibz_mat_4x4_mul(&product.basis, &rightmul, &lat->basis);
+    ibz_mul(&product.denom, &lat->denom, &alpha->denom);
+    quat_lattice_hnf(&product);
+
+    ibz_mat_4x4_copy(&res->basis, &product.basis);
+    ibz_copy(&res->denom, &product.denom);
+
+    quat_lattice_finalize(&product);
+    ibz_mat_4x4_finalize(&rightmul);
+}
+
 // lattice assumed of full rank and under HNF, none of both is tested so far
 int quat_lattice_contains_without_alg(quat_alg_coord_t *coord, const quat_lattice_t *lat, const quat_alg_elem_t *x){
     int res = 1;

@@ -306,6 +306,12 @@ void ibz_mat_2x2_copy(ibz_mat_2x2_t *new, const ibz_mat_2x2_t *mat);
 void ibz_mat_4x4_copy(ibz_mat_4x4_t *new, const ibz_mat_4x4_t *mat);
 
 void ibz_vec_4_set(ibz_vec_4_t *vec, int64_t coord0, int64_t coord1, int64_t coord2, int64_t coord3);
+void ibz_vec_4_add(ibz_vec_4_t *res, const ibz_vec_4_t *a,
+                   const ibz_vec_4_t *b);
+void ibz_vec_4_sub(ibz_vec_4_t *res, const ibz_vec_4_t *a,
+                   const ibz_vec_4_t *b);
+void ibz_vec_4_scalar_mul(ibz_vec_4_t *prod, const ibz_t *scalar,
+                          const ibz_vec_4_t *vec);
 
 void ibz_mat_4x4_transpose(ibz_mat_4x4_t *transposed, const ibz_mat_4x4_t *mat);
 void ibz_mat_4x4_mul(ibz_mat_4x4_t *res, const ibz_mat_4x4_t *a, const ibz_mat_4x4_t *b);
@@ -394,7 +400,12 @@ static inline void ibz_content(ibz_t *content, const ibz_vec_4_t *v) {
  * @param p seond parameter defining the equation, must be prime
  * @return 1 if success, 0 otherwise
  */
-int ibz_cornacchia_prime(ibz_t *x, ibz_t *y, const ibz_t *n , const ibz_t *p); 
+int ibz_cornacchia_prime(ibz_t *x, ibz_t *y, const ibz_t *n , const ibz_t *p);
+
+/* Onuki-style bounded factorization: small primes <=97, then a prime residual.
+ * On success x*x+y*y=n; on failure outputs are zero. Signed outputs allowed. */
+int ibz_sum_of_two_squares(ibz_t *x, ibz_t *y, const ibz_t *n, int primality_iterations);
+
 
 /**
  * @brief Solving cornacchia to find x² + n y³ = 2^exp_adjust * p in the special case of n=3 mod 4
@@ -514,6 +525,16 @@ void quat_alg_mul(quat_alg_elem_t *res, const quat_alg_elem_t *a, const quat_alg
 */
 void quat_alg_norm(ibq_t *res, const quat_alg_elem_t *x, const quat_alg_t *alg);
 
+/**
+ * @brief Reduced norm as a normalized numerator and denominator.
+ *
+ * This is the non-breaking counterpart of the v2.0 quat_alg_norm API.  The
+ * legacy rational-returning function remains available to existing callers.
+ */
+void quat_alg_norm_num_denom(ibz_t *res_num, ibz_t *res_denom,
+                             const quat_alg_elem_t *x,
+                             const quat_alg_t *alg);
+
 /** @brief reduced trace of alg_elem x
  * 
  * @param res Output: rational which will contain the reduced trace of a
@@ -560,6 +581,13 @@ int quat_alg_coord_is_zero(const quat_alg_coord_t *x);
 void quat_lattice_add(quat_lattice_t *res, const quat_lattice_t *lat1, const quat_lattice_t *lat2);
 void quat_lattice_intersect(quat_lattice_t *res, const quat_lattice_t *lat1, const quat_lattice_t *lat2);
 void quat_lattice_mul(quat_lattice_t *res, const quat_lattice_t *lat1, const quat_lattice_t *lat2, const quat_alg_t *alg);
+int quat_lattice_equal(const quat_lattice_t *lat1, const quat_lattice_t *lat2);
+
+/** Right-multiply every element of a lattice by an algebra element. */
+void quat_lattice_alg_elem_mul(quat_lattice_t *res,
+                               const quat_lattice_t *lat,
+                               const quat_alg_elem_t *alpha,
+                               const quat_alg_t *alg);
 
 /**
  * @brief Modifies a lattice to put it in hermite normal form
@@ -788,6 +816,19 @@ int quat_lideal_generator_coprime(quat_alg_elem_t *gen, const quat_left_ideal_t 
 int quat_lideal_mul(quat_left_ideal_t *product, const quat_left_ideal_t *lideal, const quat_alg_elem_t *alpha, const quat_alg_t *alg, int bound); 
 
 /**
+ * @brief Direct left-ideal product I * alpha.
+ *
+ * This is the v2.0 lattice-based construction.  Unlike quat_lideal_mul(), it
+ * does not search for a short generator, so it cannot fail because that search
+ * exhausts its bound.  It returns 0 only when the resulting ideal norm is not
+ * integral.
+ */
+int quat_lideal_mul_direct(quat_left_ideal_t *product,
+                           const quat_left_ideal_t *lideal,
+                           const quat_alg_elem_t *alpha,
+                           const quat_alg_t *alg);
+
+/**
  * @brief  Sum of two left ideals
  *
  * @param sum Output: Left ideal which is the sum of the 2 inputs
@@ -856,6 +897,21 @@ void quat_lideal_right_order(quat_order_t *order, const quat_left_ideal_t *lidea
  * @param alg the quaternion algebra
  */
 void quat_lideal_reduce_basis(ibz_mat_4x4_t *reduced, ibz_mat_4x4_t *gram, const quat_left_ideal_t *lideal, const quat_alg_t *alg); //replaces lideal_lll
+
+/**
+ * @brief Multiply two ideal lattices and return an LLL-reduced view.
+ *
+ * `product` remains in HNF, as required by the current lattice API.  The
+ * separate `reduced` and `gram` outputs provide the reduced representation for
+ * enumeration algorithms.  This preserves the useful v2.0 operation without
+ * violating the current HNF invariant.
+ */
+void quat_lideal_lideal_mul_reduced(quat_left_ideal_t *product,
+                                    ibz_mat_4x4_t *reduced,
+                                    ibz_mat_4x4_t *gram,
+                                    const quat_left_ideal_t *lideal1,
+                                    const quat_left_ideal_t *lideal2,
+                                    const quat_alg_t *alg);
 
 /** @}
 */

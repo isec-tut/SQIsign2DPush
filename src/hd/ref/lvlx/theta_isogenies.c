@@ -100,8 +100,7 @@
 
 static void fp2_print(char *name, fp2_t const a) {
   fp2_t b;
-  fp2_set(&b, 1);
-  fp2_mul(&b, &b, &a);
+  fp2_frommont(&b, &a);
   printf("%s0x", name);
   for (int i = NWORDS_FIELD - 1; i >= 0; i--)
     printf("%016llx", (unsigned long long)b.re[i]);

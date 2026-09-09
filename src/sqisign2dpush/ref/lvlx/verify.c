@@ -1,3 +1,4 @@
+#include <encoded_sizes.h>
 #include <curve_extras.h>
 #include <ec.h>
 #include <fips202.h>
@@ -29,8 +30,7 @@
 static void fp2_print(char *name, fp2_t const a) {
   fp2_t b;
   // fp2_frommont(&b, a);
-  fp2_set(&b, 1);
-  fp2_mul(&b, &b, &a);
+  fp2_frommont(&b, &a);
   printf("%s0x", name);
   for (int i = NWORDS_FIELD - 1; i >= 0; i--)
     printf("%016llx", (unsigned long long)b.re[i]);
@@ -240,21 +240,23 @@ void hash_challenge(ibz_t *hash, const ec_curve_t *curve,
   ibz_t pow3;
   ibz_init(&pow3);
   ibz_pow(&pow3, &ibz_const_three, EXPONENT_THREE);
-  unsigned char *buf = malloc(sizeof(fp2_t) + sizeof(fp2_t) + length);
+  unsigned char *buf = malloc(2 * FP2_ENCODED_BYTES + length);
   {
     fp2_t j1, j2;
     ec_j_inv(&j1, curve);
     ec_j_inv(&j2, &pk->curve);
-    memcpy(buf, &j1, sizeof(j1));
-    memcpy(buf + sizeof(j1), &j2, sizeof(j2));
-    memcpy(buf + sizeof(j1) + sizeof(j2), m, length);
+    fp_encode_legacy_hash(buf, j1.re);
+    fp_encode_legacy_hash(buf + FP_ENCODED_BYTES, j1.im);
+    fp_encode_legacy_hash(buf + FP2_ENCODED_BYTES, j2.re);
+    fp_encode_legacy_hash(buf + FP2_ENCODED_BYTES + FP_ENCODED_BYTES, j2.im);
+    memcpy(buf + 2 * FP2_ENCODED_BYTES, m, length);
   }
 
   {
-    digit_t digits[NWORDS_FIELD] = {0};
+    digit_t digits[NWORDS_ORDER] = {0};
     // SHAKE256((void *)digits, sizeof(digits), buf,
-    //          sizeof(fp2_t) + sizeof(fp2_t) + length);
-    sha3_256((void *)digits, buf, sizeof(fp2_t) + sizeof(fp2_t) + length);
+    //          2 * FP2_ENCODED_BYTES + length);
+    sha3_256((void *)digits, buf, 2 * FP2_ENCODED_BYTES + length);
 
     for (int i = 2; i < HASH_ITERATIONS; i++) {
       // SHAKE256((void *)digits, sizeof(digits), (void *)digits,
@@ -287,32 +289,16 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
   // uint64_t start_sqrt = fp2_sqrt_count;
 
   if (timings) {
-    timings->ms_eval_three = 0.f;
-    timings->ms_basis_three_hint = 0.f;
-    timings->ms_challenge_biscalar = 0.f;
-    timings->ms_eval_three_prev = 0.f;
-    timings->ms_three_isogenous_coeff_to_kernel = 0.f;
-    timings->ms_challenge_basis_hint = 0.f;
-    timings->ms_matrix_application = 0.f;
-    timings->ms_aux_basis_hint = 0.f;
-    timings->ms_kernel_iso2 = 0.f;
-    timings->ms_eval_even = 0.f;
-    timings->ms_aux_doubles = 0.f;
-    timings->ms_copy_bases_to_kernel = 0.f;
-    timings->ms_theta_setup = 0.f;
-    timings->ms_theta_chain_verify = 0.f;
-    timings->ms_hash_challenge = 0.f;
-    timings->ms_final_check = 0.f;
-    timings->total_isog_length_three = 0UL;
-    timings->total_isog_length_even = 0UL;
-    timings->total_isog_length_two_two = 0UL;
+    timings->ms_ver_ec_isog = 0.f;
+    timings->ms_ver_ec_non_isog = 0.f;
+    timings->ms_ver_quat = 0.f;
   }
 
   int verify;
 
   ec_basis_t Bpk_verify;
   int ok;
-  VERIFY_TIME_FIELD(ms_basis_three_hint,
+  VERIFY_TIME_FIELD(ms_ver_ec_non_isog,
                     ok = ec_curve_to_basis_3f_from_hint(
                         &Bpk_verify, &pk->curve, pk->hint_pk_three));
   assert(ok);
@@ -325,7 +311,7 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
 
   ibz_set(&vec_can[0], 1);
   ibz_copy_digit_array(&(vec_can[1]), sig->challenge);
-  VERIFY_TIME_FIELD(ms_challenge_biscalar,
+  VERIFY_TIME_FIELD(ms_ver_ec_non_isog,
                     ec_biscalar_mul_ibz(&kernel_chl_verify, &pk->curve,
                                         &vec_can[0], &vec_can[1],
                                         &Bpk_verify));
@@ -354,17 +340,14 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
     //        global_isog_counters.tpl_count, global_isog_counters.isog3_count,
     //        global_isog_counters.eval3_count);
     if (timings) {
-      timings->ms_eval_three +=
+      timings->ms_ver_ec_isog +=
           (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_eval_three_prev +=
-          (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->total_isog_length_three += (unsigned long)EXPONENT_THREE;
     }
   }
   // point_print("E_chl_verify.A24: ", E_chl_verify.A24);
   // point_print("E_chl_prev_verify.A24: ", E_chl_prev_verify.A24);
 
-  VERIFY_TIME_FIELD(ms_three_isogenous_coeff_to_kernel,
+  VERIFY_TIME_FIELD(ms_ver_ec_non_isog,
                     three_isogenous_coeff_to_kernel(&Kbt, &E_chl_verify,
                                                     &E_chl_prev_verify));
 #ifdef DEBUG
@@ -382,17 +365,17 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
   // printf("\n");
 
   ec_basis_t Bchl_verify;
-  VERIFY_TIME_FIELD(ms_challenge_basis_hint,
+  VERIFY_TIME_FIELD(ms_ver_ec_non_isog,
                     ok = ec_curve_to_basis_2f_from_hint(
                         &Bchl_verify, &E_chl_verify, TORSION_PLUS_EVEN_POWER,
                         sig->hint_chall));
   assert(ok);
   // ec_curve_to_basis_2(&Bchl_verify, &E_chl_verify);
-  VERIFY_TIME_FIELD(ms_matrix_application,
+  VERIFY_TIME_FIELD(ms_ver_ec_non_isog,
                     matrix_application_even_basis(&Bchl_verify, &E_chl_verify,
                                                   &sig->mat_rsp, EXPONENT_TWO));
   ec_basis_t Baux_verify;
-  VERIFY_TIME_FIELD(ms_aux_basis_hint,
+  VERIFY_TIME_FIELD(ms_ver_ec_non_isog,
                     ok = ec_curve_to_basis_2f_from_hint(
                         &Baux_verify, &sig->E_aux, TORSION_PLUS_EVEN_POWER,
                         sig->hint_aux));
@@ -402,22 +385,22 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
   ec_point_t kernel_iso2_verify;
 
   if (sig->n1 > 0) {
-    VERIFY_TIME_FIELD(ms_kernel_iso2, {
-      ibz_t gcd_verify;
-      ibz_init(&gcd_verify);
-      ibz_gcd(&gcd_verify, &sig->mat_rsp[0][0], &ibz_const_two);
-      int check1 = ibz_is_one(&gcd_verify);
-      ibz_gcd(&gcd_verify, &sig->mat_rsp[1][0], &ibz_const_two);
-      int check2 = ibz_is_one(&gcd_verify);
-      if (check1 || check2) {
-        copy_point(&kernel_iso2_verify, &Bchl_verify.P);
-      } else {
-        copy_point(&kernel_iso2_verify, &Bchl_verify.Q);
-      }
-      ibz_finalize(&gcd_verify);
-    });
+    int check1, check2;
+    ibz_t gcd_verify;
+    ibz_init(&gcd_verify);
+    ibz_gcd(&gcd_verify, &sig->mat_rsp[0][0], &ibz_const_two);
+    check1 = ibz_is_one(&gcd_verify);
+    ibz_gcd(&gcd_verify, &sig->mat_rsp[1][0], &ibz_const_two);
+    check2 = ibz_is_one(&gcd_verify);
+    ibz_finalize(&gcd_verify);
+    
+    if (check1 || check2) {
+      copy_point(&kernel_iso2_verify, &Bchl_verify.P);
+    } else {
+      copy_point(&kernel_iso2_verify, &Bchl_verify.Q);
+    }
 
-    VERIFY_TIME_FIELD(ms_aux_doubles, {
+    VERIFY_TIME_FIELD(ms_ver_ec_non_isog, {
       for (int i = 0; i < (int)(EXPONENT_TWO - sig->n1); i++) {
         ec_dbl(&kernel_iso2_verify, &E_chl_verify, &kernel_iso2_verify);
       }
@@ -441,7 +424,7 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
       clock_t _ts = clock();
       ec_eval_even(&E_chl2_verify, &iso2_verify, pts_verify, 4);
       if (timings) {
-        timings->ms_eval_even +=
+        timings->ms_ver_ec_isog +=
             (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
       }
     }
@@ -486,9 +469,6 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
     //     PRINT_AVG("EVAL4_SING", global_isog_counters.eval4_sing_ops,
     //               global_isog_counters.eval4_sing_ker_count);
     // #undef PRINT_AVG
-    if (timings) {
-      timings->total_isog_length_even += (unsigned long)sig->n1;
-    }
 
     copy_curve(&E_chl_verify, &E_chl2_verify);
     copy_point(&Bchl_verify.P, &pts_verify[0]);
@@ -496,7 +476,7 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
     copy_point(&Bchl_verify.PmQ, &pts_verify[2]);
     copy_point(&Kbt, &pts_verify[3]);
 
-    VERIFY_TIME_FIELD(ms_aux_doubles, {
+    VERIFY_TIME_FIELD(ms_ver_ec_non_isog, {
       for (int i = 0; i < sig->n1; i++) {
         ec_dbl(&Baux_verify.P, &sig->E_aux, &Baux_verify.P);
         ec_dbl(&Baux_verify.Q, &sig->E_aux, &Baux_verify.Q);
@@ -514,7 +494,7 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
   // printf("\n");
 
   theta_kernel_couple_points_t dim_two_ker_verify;
-  VERIFY_TIME_FIELD(ms_copy_bases_to_kernel,
+  VERIFY_TIME_FIELD(ms_ver_ec_non_isog,
                     copy_bases_to_kernel(&dim_two_ker_verify, &Baux_verify,
                                          &Bchl_verify));
   // point_print("dim_two_ker_verify.T1.P1: ", dim_two_ker_verify.T1.P1);
@@ -554,7 +534,7 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
 
   unsigned length_verify = (unsigned)EXPONENT_TWO - (unsigned)sig->n1;
   if (timings) {
-    timings->ms_theta_setup +=
+    timings->ms_ver_ec_non_isog +=
         (float)(clock() - t_theta_setup) * 1000.f / (float)CLOCKS_PER_SEC;
   }
 
@@ -567,11 +547,8 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
         length_verify, &domain_E_verify, &dim_two_ker_verify, extra_torsion,
         &codomain_E_verify, &coupleP_verify, 1);
     if (timings) {
-      timings->ms_theta_chain_verify +=
+      timings->ms_ver_ec_isog +=
           (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
-    if (timings && ret) {
-      timings->total_isog_length_two_two += length_verify;
     }
     verify1 = ret;
   }
@@ -581,7 +558,7 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
   // printf("ret: %d\n", ret);
   ec_point_t K_com;
   if (verify1) {
-    VERIFY_TIME_FIELD(ms_hash_challenge, {
+    {
       fp2_t j_codomain_E1_verify, j_codomain_E2_verify;
       ec_j_inv(&j_codomain_E1_verify, &codomain_E_verify.E1);
       ec_j_inv(&j_codomain_E2_verify, &codomain_E_verify.E2);
@@ -605,15 +582,15 @@ int protocols_verify(signature_t *sig, const public_key_t *pk,
       ibz_finalize(&chl);
       ibz_finalize(&chl1);
       ibz_finalize(&chl2);
-    });
+    }
   }
   // assert(verify2);
 
-  VERIFY_TIME_FIELD(ms_final_check, {
+  {
     if (verify2) {
       verify3 = !ec_is_zero(&K_com);
     }
-  });
+  }
 
   // assert(verify3);
 

@@ -46,8 +46,7 @@ static int test_point_order_threef(const ec_point_t *P, const ec_curve_t *E) {
 // XXX FIXME stolen from src/ec/opt/generic/test/isog-test.c
 static void fp2_print(char *name, fp2_t const a) {
   fp2_t b;
-  fp2_set(&b, 1);
-  fp2_mul(&b, &b, &a);
+  fp2_frommont(&b, &a);
   printf("%s = 0x", name);
   for (int i = NWORDS_FIELD - 1; i >= 0; i--)
     printf("%016" PRIx64, b.re[i]);
@@ -528,8 +527,8 @@ int id2iso_ideal_to_isogeny_two_long_power_of_2(
     // computation of lideal_equiv as lideal_small* gen / norm(lideal_small)
     quat_alg_elem_copy(&quat_temp, &gen);
     ibz_mul(&quat_temp.denom, &quat_temp.denom, &lideal_small.norm);
-    int lideal_mul_ok =
-        quat_lideal_mul(&lideal_equiv, &lideal_small, &quat_temp, Bpoo, 0);
+    int lideal_mul_ok = quat_lideal_mul_direct(
+        &lideal_equiv, &lideal_small, &quat_temp, Bpoo);
     assert(lideal_mul_ok);
 
     // computing the right order of lideal_equiv
@@ -1031,7 +1030,7 @@ void id2iso_ideal_to_isogeny_even(ec_isog_even_t *isog,
   ibz_finalize(&norm);
   assert(isog->length <= TORSION_PLUS_EVEN_POWER);
 
-  digit_t scalars[2][NWORDS_FIELD];
+  digit_t scalars[2][NWORDS_ORDER];
   {
     ibz_vec_2_t vec;
     ibz_vec_2_init(&vec);
@@ -1058,6 +1057,13 @@ void id2iso_ideal_to_isogeny_even(ec_isog_even_t *isog,
 void id2iso_ideal_to_isogeny_even_dlogs(ec_isog_even_t *isog,
                                         ibz_vec_2_t *ker_dlog,
                                         const quat_left_ideal_t *lideal_input) {
+  id2iso_ideal_to_isogeny_even_dlogs_timed(isog, ker_dlog, lideal_input, NULL, NULL);
+}
+
+void id2iso_ideal_to_isogeny_even_dlogs_timed(
+    ec_isog_even_t *isog, ibz_vec_2_t *ker_dlog,
+    const quat_left_ideal_t *lideal_input, float *quat_ms, float *ec_ms) {
+  clock_t category_start = quat_ms ? clock() : 0;
   // compute length
   isog->length = 0;
   ibz_t norm;
@@ -1071,7 +1077,7 @@ void id2iso_ideal_to_isogeny_even_dlogs(ec_isog_even_t *isog,
   ibz_finalize(&norm);
   assert(isog->length <= TORSION_PLUS_EVEN_POWER);
 
-  digit_t scalars[2][NWORDS_FIELD];
+  digit_t scalars[2][NWORDS_ORDER];
   {
     ibz_vec_2_t vec;
     ibz_vec_2_init(&vec);
@@ -1094,15 +1100,21 @@ void id2iso_ideal_to_isogeny_even_dlogs(ec_isog_even_t *isog,
   }
 
   isog->curve = CURVE_E0;
+  if (quat_ms)
+    *quat_ms += (float)(clock() - category_start) * 1000.f / CLOCKS_PER_SEC;
+  category_start = ec_ms ? clock() : 0;
+
   ec_biscalar_mul(&isog->kernel, &isog->curve, scalars[0], scalars[1],
                   &BASIS_EVEN);
+  if (ec_ms)
+    *ec_ms += (float)(clock() - category_start) * 1000.f / CLOCKS_PER_SEC;
 }
 
 void ec_biscalar_mul_ibz(ec_point_t *res, const ec_curve_t *curve,
                          const ibz_t *scalarP, const ibz_t *scalarQ,
                          const ec_basis_t *PQ) {
 
-  digit_t scalars[2][NWORDS_FIELD];
+  digit_t scalars[2][NWORDS_ORDER];
   ibz_to_digit_array(scalars[0], scalarP);
   ibz_to_digit_array(scalars[1], scalarQ);
   ec_biscalar_mul(res, curve, scalars[0], scalars[1], PQ);
@@ -1386,6 +1398,15 @@ void id2iso_ideal_to_isogeny_odd_plus(ec_isog_odd_t *isog,
                                       const ec_curve_t *domain,
                                       const ec_basis_t *basis_plus,
                                       const quat_left_ideal_t *lideal_input) {
+  id2iso_ideal_to_isogeny_odd_plus_timed(
+      isog, ker_dlog, domain, basis_plus, lideal_input, NULL, NULL);
+}
+
+void id2iso_ideal_to_isogeny_odd_plus_timed(
+    ec_isog_odd_t *isog, ibz_vec_2_t *ker_dlog, const ec_curve_t *domain,
+    const ec_basis_t *basis_plus, const quat_left_ideal_t *lideal_input,
+    float *quat_ms, float *ec_ms) {
+  clock_t category_start = quat_ms ? clock() : 0;
   digit_t scalars_plus[2][NWORDS_ORDER] = {0};
   {
     ibz_vec_2_t vec;
@@ -1429,9 +1450,15 @@ void id2iso_ideal_to_isogeny_odd_plus(ec_isog_odd_t *isog,
   }
 
   isog->curve = *domain;
+  if (quat_ms)
+    *quat_ms += (float)(clock() - category_start) * 1000.f / CLOCKS_PER_SEC;
+  category_start = ec_ms ? clock() : 0;
+
   ec_biscalar_mul(&isog->ker_plus, domain, scalars_plus[0], scalars_plus[1],
                   basis_plus);
   ec_set_zero(&(isog->ker_minus));
+  if (ec_ms)
+    *ec_ms += (float)(clock() - category_start) * 1000.f / CLOCKS_PER_SEC;
 }
 
 void id2iso_kernel_dlogs_to_ideal(quat_left_ideal_t *lideal,

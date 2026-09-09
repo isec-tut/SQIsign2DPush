@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-11" cr libsqisign_id2iso_lvl5.a CMakeFiles/sqisign_id2iso_lvl5.dir/__/id2isox/id2iso.c.o
-"/usr/bin/gcc-ranlib-11" libsqisign_id2iso_lvl5.a

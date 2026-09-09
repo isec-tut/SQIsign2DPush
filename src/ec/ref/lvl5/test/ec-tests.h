@@ -15,6 +15,9 @@ extern const digit_t p[NWORDS_FIELD];
 static int BENCH_LOOPS = 1000;       // Number of iterations per bench
 static int TEST_LOOPS  = 512;       // Number of iterations per test
 
+#include "../../ecx/test/ec-tests-current.h"
+
+#if 0
 
 bool ec_test()
 { // Tests for ecc arithmetic
@@ -161,8 +164,8 @@ bool dlog_test()
     fp_set(PQ.z.im, 0);
 
     AC.C.re[0] = 0x01;
-    fp_copy(f1, TWOpFm1);
-    fp_copy(f2, TWOpF);
+    memcpy(f1, TWOpFm1, sizeof(digit_t) * NWORDS_ORDER);
+    memcpy(f2, TWOpF, sizeof(digit_t) * NWORDS_ORDER);
     fp2_tomont(&AC.C, &AC.C);
 
     copy_point(&PQ2.P, &P);
@@ -214,8 +217,8 @@ bool dlog_test()
     fp_set(PQ.z.im, 0);
 
     AC.C.re[0] = 0x01;
-    fp_copy(tpFdiv2, THREEpFdiv2);
-    fp_copy(tpF, THREEpF);
+    memcpy(tpFdiv2, THREEpFdiv2, sizeof(digit_t) * NWORDS_ORDER);
+    memcpy(tpF, THREEpF, sizeof(digit_t) * NWORDS_ORDER);
     fp2_tomont(&AC.C, &AC.C);
 
     copy_point(&PQ2.P, &P);
@@ -253,6 +256,8 @@ bool dlog_test()
 
     return OK;
 }
+
+#endif
 
 bool ec_run()
 {

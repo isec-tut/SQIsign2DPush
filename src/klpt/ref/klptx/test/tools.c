@@ -449,11 +449,7 @@ int klpt_test_represent_integer() {
         ibz_printf("unequality of norm \n %Zd \n %Zd \n",ibz_norm,M);
     }
 
-    ibz_t remainder;
-    ibz_init(&remainder);
-    ibz_div(&temp,&remainder,&M_begin,&M);
-
-    found = found && (ibz_cmp(&remainder,&ibz_const_zero)==0);
+    found = found && (ibz_cmp(&M_begin,&M)==0);
 
     quat_alg_elem_finalize(&gamma);
     ibz_finalize(&M);
@@ -461,7 +457,6 @@ int klpt_test_represent_integer() {
     ibz_finalize(&p);
     ibz_finalize(&temp);
     ibz_finalize(&M_begin);
-    ibz_finalize(&remainder); 
     ibq_finalize(&norm);
     ibz_finalize(&ibz_norm); 
     return found;

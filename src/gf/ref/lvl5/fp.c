@@ -1,23 +1,13 @@
 #include "include/fp.h"
+#include <encoded_sizes.h>
 
 // Level 5 Prime p =
 // 0x4c54193130bb665f234a5c454b6e0020b8d8a1c1c552969b4c46ef90acec987fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+/* Saturated ordinary modulus for integer conversion and binary GCD. */
 const uint64_t p[NWORDS_FIELD] = {0xffffffffffffffff, 0xffffffffffffffff,
                                   0xffffffffffffffff, 0xffffffffffffffff,
                                   0x4c46ef90acec987f, 0xb8d8a1c1c552969b,
                                   0x234a5c454b6e0020, 0x4c54193130bb665f};
-const uint64_t R2[NWORDS_FIELD] = {0xcc5da41faefc6b2f, 0xbf733adf97cc6f01,
-                                   0x87aa1f5dec2fa18b, 0x31884e9f8a5a73b0,
-                                   0x717afb04c3247564, 0xd755b50ad457b97e,
-                                   0x904dc385989a7072, 0x115ad571d261deaf};
-
-/* fiat-crypto declarations */
-typedef unsigned char fiat_p512_uint1;
-extern void fiat_p512_msat(uint64_t out1[9]);
-extern void fiat_p512_set_one(uint64_t out1[8]);
-
-extern void fiat_p512_mul(uint64_t out1[8], const uint64_t arg1[8],
-                          const uint64_t arg2[8]);
 
 void fp_set(
     digit_t *x,
@@ -29,27 +19,29 @@ void fp_set(
   }
 }
 
-bool fp_is_equal(
-    const digit_t *a,
-    const digit_t *b) { // Compare two field elements in constant time
-                        // Returns 1 (true) if a=b, 0 (false) otherwise
+bool fp_is_equal(const digit_t *a, const digit_t *b) {
   digit_t r = 0;
-
-  for (unsigned int i = 0; i < NWORDS_FIELD; i++)
-    r |= a[i] ^ b[i];
-
+  for (unsigned int i = 0; i < NWORDS_FIELD; i++) r |= a[i] ^ b[i];
   return (bool)is_digit_zero_ct(r);
 }
 
-bool fp_is_zero(
-    const digit_t *a) { // Is a field element zero?
-                        // Returns 1 (true) if a=0, 0 (false) otherwise
+bool fp_is_zero(const digit_t *a) {
   digit_t r = 0;
-
-  for (unsigned int i = 0; i < NWORDS_FIELD; i++)
-    r |= a[i] ^ 0;
-
+  for (unsigned int i = 0; i < NWORDS_FIELD; i++) r |= a[i];
   return (bool)is_digit_zero_ct(r);
+}
+
+void fp_set_zero(digit_t *x) { memset(x, 0, sizeof(fp_t)); }
+void fp_set_small(digit_t *x, const digit_t val) { fp_set(x, val); fp_tomont(x, x); }
+void fp_set_one(digit_t *x) { fp_set_small(x, 1); }
+
+/* The reference backend has no precomputed Montgomery inverse of 3. */
+void fp_div3(digit_t *out, const digit_t *in) {
+  fp_t inv3;
+
+  fp_set_small(inv3, 3);
+  fp_inv(inv3);
+  fp_mul(out, in, inv3);
 }
 
 void fp_copy(digit_t *out, const digit_t *a) {
@@ -62,26 +54,6 @@ void fp_select(digit_t *out, const digit_t *a, const digit_t *b, uint32_t c) {
     out[i] = a[i] ^ (mask & (a[i] ^ b[i]));
   }
 }
-
-void fp_div3(digit_t *out, const digit_t *in) {
-  digit_t t[NWORDS_FIELD];
-  fp_set(t, 3);
-  fp_tomont(t, t);
-  fp_inv(t);
-  fp_mul(out, in, t);
-}
-
-// void fp_neg(digit_t *out,
-//             const digit_t *a) { // Modular negation, out = -a mod p
-//                                 // Input: a in [0, p-1]
-//                                 // Output: out in [0, p-1]
-//   unsigned int i, borrow = 0;
-
-//   for (i = 0; i < NWORDS_FIELD; i++) {
-//     SUBC(out[i], borrow, ((digit_t *)p)[i], a[i], borrow);
-//   }
-//   fp_sub(out, out, (digit_t *)p);
-// }
 
 void MUL(digit_t *out, const digit_t a,
          const digit_t b) { // Digit multiplication, digit*digit -> 2-digit
@@ -149,7 +121,7 @@ void fp_inv(digit_t *a) {
 
 // helper macros and functions for binary GCD Legendre symbol calculation
 static inline uint64_t sgnw(uint64_t x) {
-  return (uint64_t)(*(int64_t *)&x >> 63);
+  return (uint64_t)((int64_t)x >> 63);
 }
 
 static inline uint64_t lzcnt(uint64_t x) {
@@ -190,39 +162,6 @@ static inline unsigned char inner_fp_adc(unsigned char cc, uint64_t a,
   uint64_t tempReg = a + (uint64_t)(cc != 0);
   *d = b + tempReg;
   return (unsigned char)((tempReg < (uint64_t)(cc != 0)) | (*d < tempReg));
-}
-
-static inline void inner_fp_normalize(digit_t *d, const digit_t *a) {
-  uint64_t d0, d1, d2, d3, d4, d5, d6, d7, m;
-  unsigned char cc;
-
-  cc = inner_fp_sbb(0, a[0], p[0], &d0);
-  cc = inner_fp_sbb(cc, a[1], p[1], &d1);
-  cc = inner_fp_sbb(cc, a[2], p[2], &d2);
-  cc = inner_fp_sbb(cc, a[3], p[3], &d3);
-  cc = inner_fp_sbb(cc, a[4], p[4], &d4);
-  cc = inner_fp_sbb(cc, a[5], p[5], &d5);
-  cc = inner_fp_sbb(cc, a[6], p[6], &d6);
-  cc = inner_fp_sbb(cc, a[7], p[7], &d7);
-
-  (void)inner_fp_sbb(cc, 0, 0, &m);
-  cc = inner_fp_adc(0, d0, m & p[0], &d0);
-  cc = inner_fp_adc(cc, d1, m & p[1], &d1);
-  cc = inner_fp_adc(cc, d2, m & p[2], &d2);
-  cc = inner_fp_adc(cc, d3, m & p[3], &d3);
-  cc = inner_fp_adc(cc, d4, m & p[4], &d4);
-  cc = inner_fp_adc(cc, d5, m & p[5], &d5);
-  cc = inner_fp_adc(cc, d6, m & p[6], &d6);
-  (void)inner_fp_adc(cc, d7, m & p[7], &d7);
-
-  d[0] = d0;
-  d[1] = d1;
-  d[2] = d2;
-  d[3] = d3;
-  d[4] = d4;
-  d[5] = d5;
-  d[6] = d6;
-  d[7] = d7;
 }
 
 #define inner_fp_umul(lo, hi, x, y)                                            \
@@ -325,10 +264,10 @@ static uint64_t lindiv31abs(digit_t *d, const digit_t *a, const digit_t *b,
 }
 
 bool fp_is_square(const digit_t *x) {
-  fp_t a, b;
+  fp_t a = {0}, b = {0};
   uint64_t xa, xb, f0, g0, f1, g1, ls;
 
-  inner_fp_normalize(a, x);
+  fp_frommont(a, x); /* GCD operates on saturated ordinary integers. */
 
   b[0] = p[0];
   b[1] = p[1];
@@ -449,7 +388,7 @@ bool fp_is_square(const digit_t *x) {
     g0 = (fg0 >> 32) - (uint64_t)0x7FFFFFFF;
     f1 = (fg1 & 0xFFFFFFFF) - (uint64_t)0x7FFFFFFF;
     g1 = (fg1 >> 32) - (uint64_t)0x7FFFFFFF;
-    fp_t na, nb;
+    fp_t na = {0}, nb = {0};
     uint64_t nega = lindiv31abs(na, a, b, f0, g0);
     (void)lindiv31abs(nb, a, b, f1, g1);
     ls ^= nega & nb[0];
@@ -478,4 +417,8 @@ bool fp_is_square(const digit_t *x) {
   uint32_t r = 1 - ((uint32_t)ls & 2);
   r &= ~fp_is_zero(x);
   return r == 1;
+}
+
+void fp_encode_legacy_hash(void *dst, const digit_t *a) {
+  memcpy(dst, a, FP_ENCODED_BYTES);
 }

@@ -52,14 +52,18 @@ static void sub_test(
 void fprandom_test(digit_t *a) { // Generating a pseudo-random field element in
                                  // [0, p-1] SECURITY NOTE: distribution is not
                                  // fully uniform. TO BE USED FOR TESTING ONLY.
-  unsigned int i, diff = 256 - 254, nwords = NWORDS_FIELD;
+  unsigned int i, nwords = NWORDS_FIELD, used_bits = 0;
+  digit_t top = p[nwords - 1];
   unsigned char *string = NULL;
 
+  memset(a, 0, sizeof(fp_t));
   string = (unsigned char *)a;
   for (i = 0; i < sizeof(digit_t) * nwords; i++) {
     *(string + i) = (unsigned char)rand(); // Obtain 256-bit number
   }
-  a[nwords - 1] &= (((digit_t)(-1) << diff) >> diff);
+  while (top != 0) { used_bits++; top >>= 1; }
+  if (used_bits < RADIX)
+    a[nwords - 1] &= (((digit_t)1 << used_bits) - 1);
 
   while (compare_words((digit_t *)p, a, nwords) <
          1) { // Force it to [0, modulus-1]

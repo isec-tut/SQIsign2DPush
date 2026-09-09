@@ -25,7 +25,7 @@ set(CMAKE_C_FLAGS_MSAN
 
 # UndefinedBehaviour
 set(CMAKE_C_FLAGS_UBSAN
-    "-fsanitize=undefined"
+    "-fsanitize=undefined -fno-omit-frame-pointer -g -O1"
     CACHE STRING "Flags used by the C compiler during UndefinedBehaviourSanitizer builds."
     FORCE)
 

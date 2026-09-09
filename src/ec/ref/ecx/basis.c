@@ -8,13 +8,6 @@
 extern const ec_basis_t BASIS_EVEN;
 #endif
 
-static inline void AC_to_A24(ec_point_t *A24, ec_curve_t const *E) {
-  // A24 = (A+2C : 4C)
-  fp2_add(&A24->z, &E->C, &E->C);
-  fp2_add(&A24->x, &E->A, &A24->z);
-  fp2_add(&A24->z, &A24->z, &A24->z);
-}
-
 static void xTPL(ec_point_t *Q, const ec_point_t *P, const ec_point_t *A3) {
   /* -----------------------------------------------------------------------------
    * * Differential point tripling given the montgomery coefficient A3 =

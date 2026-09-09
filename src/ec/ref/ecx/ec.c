@@ -27,8 +27,7 @@ fp2_counters_t count_ec_dlog_3_tate_fp2 = {0};
 
 static void fp2_print(char *name, fp2_t const a) {
   fp2_t b;
-  fp2_set(&b, 1);
-  fp2_mul(&b, &b, &a);
+  fp2_frommont(&b, &a);
   printf("%s0x", name);
   for (int i = NWORDS_FIELD - 1; i >= 0; i--)
     printf("%016llx", (unsigned long long)b.re[i]);
@@ -101,6 +100,12 @@ static void mp_shiftl_any(digit_t *a, unsigned int shift, unsigned int nwords) {
 
 bool ec_is_zero(ec_point_t const *P) { return fp2_is_zero(&P->z); }
 
+void ec_point_init(ec_point_t *P) {
+  /* Identity element in projective Montgomery coordinates: (1:0). */
+  fp2_set_one(&P->x);
+  fp2_set_zero(&P->z);
+}
+
 void ec_init(ec_point_t *P) { // Initialize point as identity element (1:0)
   fp_t one = {0};
 
@@ -115,11 +120,16 @@ void ec_curve_init(ec_curve_t *curve) {
   memset((digit_t *)curve, 0, sizeof(ec_curve_t));
   one[0] = 1;
   fp_tomont(curve->C.re, one);
-  // fp2_set_zero(&curve->A);
-  // fp2_set_zero(&curve->C);
-  // fp2_set_zero(&curve->A24.x);
-  // fp2_set_zero(&curve->A24.z);
-  // fp2_set_zero(&curve->A24.z);
+  /* v2.0 uses the identity point as the uncomputed A24 sentinel. */
+  fp2_set_one(&curve->A24.x);
+  fp2_set_zero(&curve->A24.z);
+  curve->is_A24_computed_and_normalized = false;
+}
+
+int ec_curve_init_from_A(ec_curve_t *curve, const fp2_t *A) {
+  ec_curve_init(curve);
+  fp2_copy(&curve->A, A);
+  return ec_curve_verify_A(A);
 }
 
 void ec_set_zero(ec_point_t *P) {
@@ -137,12 +147,14 @@ void copy_curve(ec_curve_t *E1, ec_curve_t const *E2) {
   fp2_copy(&(E1->A), &(E2->A));
   fp2_copy(&(E1->C), &(E2->C));
   copy_point(&(E1->A24), &(E2->A24));
+  E1->is_A24_computed_and_normalized = E2->is_A24_computed_and_normalized;
 }
 
 void ec_normalize_curve(ec_curve_t *E) {
   fp2_inv(&E->C);
   fp2_mul(&E->A, &E->A, &E->C);
   fp2_set_one(&E->C);
+  E->is_A24_computed_and_normalized = false;
 }
 
 void ec_normalize_point(ec_point_t *P) {
@@ -169,6 +181,13 @@ void A24_from_AC(ec_point_t *A24, ec_curve_t const *E) {
 void A24_from_AC_and_normalize(ec_point_t *A24, ec_curve_t const *E) {
   A24_from_AC(A24, E);
   ec_normalize_point(A24);
+}
+
+void ec_curve_normalize_A24(ec_curve_t *E) {
+  if (!E->is_A24_computed_and_normalized) {
+    A24_from_AC_and_normalize(&E->A24, E);
+    E->is_A24_computed_and_normalized = true;
+  }
 }
 
 void xDBL(ec_point_t *Q, ec_point_t const *P, ec_point_t const *AC) {
@@ -1829,7 +1848,7 @@ void ec_dlog_2(
                      NWORDS_ORDER);
   }
 
-  memcpy((digit_t *)fp2, (digit_t *)TWOpFm1, NWORDS_FIELD * RADIX / 8);
+  memcpy((digit_t *)fp2, (digit_t *)TWOpFm1, NWORDS_ORDER * RADIX / 8);
 
   if (mp_compare(scalarP, fp2, NWORDS_ORDER) == 1 ||
       (mp_compare(scalarQ, fp2, NWORDS_ORDER) == 1 &&
@@ -2403,17 +2422,16 @@ void weil(fp2_t *r, uint32_t e, ec_point_t *P, ec_point_t *Q, ec_point_t *PQ,
   weil_n(r, e, P, Q, PQ, &ixP, &ixQ, &E->A24);
 }
 
-// int ec_curve_verify_A(
-//     const fp2_t *A) { // Verify the Montgomery coefficient A is valid (A^2-4
-//     \ne
-//                       // 0) Return 1 if curve is valid, 0 otherwise
-//   fp2_t t;
-//   fp2_set_one(&t);
-//   fp_add(&t.re, &t.re, &t.re); // t=2
-//   if (fp2_is_equal(A, &t))
-//     return 0;
-//   return 1;
-// }
+int ec_curve_verify_A(const fp2_t *A) {
+  /* A Montgomery curve is nonsingular iff A != +/-2 (with C != 0). */
+  fp2_t two;
+  fp2_set_one(&two);
+  fp2_add(&two, &two, &two);
+  if (fp2_is_equal(A, &two)) return 0;
+  fp2_neg(&two, &two);
+  if (fp2_is_equal(A, &two)) return 0;
+  return 1;
+}
 
 // cyclotomic squaring: (a+bi)^2 = (2a^2 - 1) + 2abi
 static inline void fp2_sqr_cyclo(fp2_t *x, const fp2_t *y) {

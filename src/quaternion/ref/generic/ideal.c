@@ -255,6 +255,39 @@ int quat_lideal_mul(quat_left_ideal_t *product, const quat_left_ideal_t *lideal,
     return(found);
 }
 
+int quat_lideal_mul_direct(quat_left_ideal_t *product,
+                           const quat_left_ideal_t *lideal,
+                           const quat_alg_elem_t *alpha,
+                           const quat_alg_t *alg) {
+    ibz_t alpha_num, alpha_denom, numerator, denominator, remainder;
+    int is_integral;
+
+    ibz_init(&alpha_num);
+    ibz_init(&alpha_denom);
+    ibz_init(&numerator);
+    ibz_init(&denominator);
+    ibz_init(&remainder);
+
+    quat_alg_norm_num_denom(&alpha_num, &alpha_denom, alpha, alg);
+    ibz_mul(&numerator, &lideal->norm, &alpha_num);
+    ibz_div(&denominator, &remainder, &numerator, &alpha_denom);
+    is_integral = ibz_is_zero(&remainder);
+
+    if (is_integral) {
+        quat_lattice_alg_elem_mul(&product->lattice, &lideal->lattice,
+                                  alpha, alg);
+        product->parent_order = lideal->parent_order;
+        ibz_copy(&product->norm, &denominator);
+    }
+
+    ibz_finalize(&remainder);
+    ibz_finalize(&denominator);
+    ibz_finalize(&numerator);
+    ibz_finalize(&alpha_denom);
+    ibz_finalize(&alpha_num);
+    return is_integral;
+}
+
 void quat_lideal_add(quat_left_ideal_t *sum, const quat_left_ideal_t *I1, const quat_left_ideal_t *I2, const quat_alg_t *alg) {
     assert(I1->parent_order == I2->parent_order);
     quat_lattice_add(&sum->lattice, &I1->lattice, &I2->lattice);
@@ -325,6 +358,32 @@ void quat_lideal_reduce_basis(ibz_mat_4x4_t *reduced, ibz_mat_4x4_t *gram, const
     ibz_mat_4x4_mul(&prod,&prod,&(alg ->gram));
     ibz_mat_4x4_mul(gram,&prod,reduced);
     ibz_mat_4x4_finalize(&prod);
+}
+
+void quat_lideal_lideal_mul_reduced(quat_left_ideal_t *product,
+                                    ibz_mat_4x4_t *reduced,
+                                    ibz_mat_4x4_t *gram,
+                                    const quat_left_ideal_t *lideal1,
+                                    const quat_left_ideal_t *lideal2,
+                                    const quat_alg_t *alg) {
+    ibz_t index;
+    int is_square;
+
+    assert(lideal1->parent_order == lideal2->parent_order);
+    ibz_init(&index);
+
+    quat_lattice_mul(&product->lattice, &lideal1->lattice,
+                     &lideal2->lattice, alg);
+    product->parent_order = lideal1->parent_order;
+    quat_lattice_index(&index, &product->lattice, product->parent_order);
+    is_square = ibz_sqrt(&product->norm, &index);
+    assert(is_square);
+
+    /* Do not store `reduced` in product->lattice: the current API requires
+     * ideal lattices to remain in Hermite normal form. */
+    quat_lideal_reduce_basis(reduced, gram, product, alg);
+
+    ibz_finalize(&index);
 }
 
 /***************************** Function from quaternion_tools.c ***************************************/

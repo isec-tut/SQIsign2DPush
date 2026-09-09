@@ -24,6 +24,8 @@ void fp2_neg(fp2_t *x, const fp2_t *y);
 void fp2_mul(fp2_t *x, const fp2_t *y, const fp2_t *z);
 void fp2_sqr(fp2_t *x, const fp2_t *y);
 void fp2_inv(fp2_t *x);
+void fp2_encode(void *dst, const fp2_t *a);
+uint32_t fp2_decode(fp2_t *d, const void *src);
 bool fp2_is_square(const fp2_t *x);
 void fp2_frob(fp2_t *x, const fp2_t *y);
 void fp2_sqrt(fp2_t *x);

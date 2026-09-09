@@ -10,6 +10,7 @@
 
 #include <ec_params.h>
 #include <fp2.h>
+#include <stdbool.h>
 
 /** @defgroup ec Elliptic curves
  * @{
@@ -88,12 +89,28 @@ typedef struct ec_curve_t {
   fp2_t A;
   fp2_t C; ///< cannot be 0
   ec_point_t A24;
+  /* True when A24 is the normalized (A+2C : 4C) value. */
+  bool is_A24_computed_and_normalized;
 } ec_curve_t;
+
+/* A24 = (A + 2C : 4C).  Keep this conversion in the public EC interface so
+ * the different EC modules use one definition, as in v2.0. */
+static inline void AC_to_A24(ec_point_t *A24, const ec_curve_t *E) {
+  fp2_add(&A24->z, &E->C, &E->C);
+  fp2_add(&A24->x, &E->A, &A24->z);
+  fp2_add(&A24->z, &A24->z, &A24->z);
+}
 
 /**
  * @brief Initialize a curve structure
  */
 void ec_curve_init(ec_curve_t *curve);
+int ec_curve_init_from_A(ec_curve_t *curve, const fp2_t *A);
+void ec_point_init(ec_point_t *P);
+void ec_curve_normalize_A24(ec_curve_t *curve);
+void ec_normalize_curve_and_A24(ec_curve_t *curve);
+void xDBL_A24(ec_point_t *Q, const ec_point_t *P, const ec_point_t *A24);
+void xDBL_E0(ec_point_t *Q, const ec_point_t *P);
 
 /** @brief An isogeny of degree a power of 2
  *
@@ -104,7 +121,7 @@ void ec_curve_init(ec_curve_t *curve);
 typedef struct ec_isog_even_t {
   ec_curve_t curve;      ///< The domain curve
   ec_point_t kernel;     ///< A kernel generator
-  unsigned short length; ///< The length as a 2-isogeny walk
+  unsigned length; ///< The length as a 2-isogeny walk
 } ec_isog_even_t;
 
 /** @brief An odd divisor of p² - 1

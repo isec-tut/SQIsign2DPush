@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-11" cr libsqisign_lvl3.a CMakeFiles/sqisign_lvl3.dir/sqisign.c.o
-"/usr/bin/gcc-ranlib-11" libsqisign_lvl3.a

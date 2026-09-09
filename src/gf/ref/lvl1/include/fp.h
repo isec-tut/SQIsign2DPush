@@ -14,7 +14,12 @@
 
 typedef digit_t fp_t[NWORDS_FIELD]; // Datatype for representing field elements
 
+/* Legacy ordinary saturated integer constructor (not a field operation). */
 void fp_set(digit_t *x, const digit_t val);
+/* Field constructors, already in Montgomery form. */
+void fp_set_small(digit_t *x, const digit_t val);
+void fp_set_zero(digit_t *x);
+void fp_set_one(digit_t *x);
 bool fp_is_equal(const digit_t *a, const digit_t *b);
 bool fp_is_zero(const digit_t *a);
 void fp_copy(digit_t *out, const digit_t *a);
@@ -33,9 +38,13 @@ void fp_inv(digit_t *x);
 bool fp_is_square(const digit_t *a);
 void fp_sqrt(digit_t *a);
 void fp_exp3div4(digit_t *out, const digit_t *a);
+/* Legacy conversion boundary: ordinary integers use 64-bit words,
+ * zero-padded to NWORDS_FIELD. Arithmetic uses canonical 64-bit limbs in [0,p). */
 void fp_tomont(digit_t *out, const digit_t *a);
 void fp_frommont(digit_t *out, const digit_t *a);
 void fp_mont_setone(digit_t *out);
+/* Stable pre-migration Montgomery bytes, for the existing hash protocol. */
+void fp_encode_legacy_hash(void *dst, const digit_t *a);
 
 /* Encode a Montgomery residue as a canonical little-endian integer. */
 void fp_encode(void *dst, const fp_t *a);

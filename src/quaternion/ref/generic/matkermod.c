@@ -95,7 +95,9 @@ static inline int is_col_zero(int rows, int cols, ibz_t mat[rows][cols], int j)
 
 /** Check that mat * trans = howell
  */
-static int howell_check_matrices(int rows, int cols, const ibz_t howell[rows][rows+1], const ibz_t trans[rows+1][rows+1], const ibz_t mat[rows][cols], ibz_t *mod)
+static int howell_check_matrices(int rows, int cols, const ibz_t *howell,
+                                 const ibz_t *trans, const ibz_t *mat,
+                                 ibz_t *mod)
 {
     const int extra = rows + 1 - cols;
     ibz_t test[rows][rows+1], res[rows][rows+1];
@@ -105,14 +107,15 @@ static int howell_check_matrices(int rows, int cols, const ibz_t howell[rows][ro
     // copy mat to the right of test
     for (int i = 0; i < rows; i++)
         for (int j = 0; j < cols; j++)
-            ibz_mod(&test[i][j+extra], &mat[i][j], mod);
+            ibz_mod(&test[i][j+extra], &mat[i * cols + j], mod);
 
-    ibz_mat_mulmod(rows, rows+1, rows+1, res, test, trans, mod);
+    ibz_mat_mulmod(rows, rows+1, rows+1, res, test,
+                   (const ibz_t (*)[rows + 1])trans, mod);
 
     int ok = 1;
     for (int i = 0; i < rows; i++)
         for (int j = 0; j < rows+1; j++)
-            ok &= ibz_cmp(&howell[i][j], &res[i][j]) == 0;
+            ok &= ibz_cmp(&howell[i * (rows + 1) + j], &res[i][j]) == 0;
 
     ibz_mat_finalize(rows, rows+1, res);
     ibz_mat_finalize(rows, rows+1, test);
@@ -160,7 +163,8 @@ int ibz_mat_howell(int rows, int cols, ibz_t howell[rows][rows+1], ibz_t trans[r
                 if (j != i) ibz_set(&trans[i][j], 0);
             ibz_set(&trans[i][i], 1);
         }
-        assert(howell_check_matrices(rows, cols, howell, trans, mat, mod));
+        assert(howell_check_matrices(rows, cols, &howell[0][0], &trans[0][0],
+                                     &mat[0][0], mod));
     }
     
     // Put in upper triangular form
@@ -175,7 +179,8 @@ int ibz_mat_howell(int rows, int cols, ibz_t howell[rows][rows+1], ibz_t trans[r
             //
             if (trans) {
                 gen_elem(rows+1, rows+1, trans, j, i+1, 0, rows+1, &U, mod);
-                assert(howell_check_matrices(rows, cols, howell, trans, mat, mod));
+                assert(howell_check_matrices(rows, cols, &howell[0][0],
+                                             &trans[0][0], &mat[0][0], mod));
             }
         }
     }
@@ -195,7 +200,7 @@ int ibz_mat_howell(int rows, int cols, ibz_t howell[rows][rows+1], ibz_t trans[r
                     ibz_mul(&trans[k][i+1], &trans[k][i+1], &u);
                     ibz_mod(&trans[k][i+1], &trans[k][i+1], mod);
                 }
-                assert(howell_check_matrices(rows, cols, howell, trans, mat, mod));
+                assert(howell_check_matrices(rows, cols, &howell[0][0], &trans[0][0], &mat[0][0], mod));
             }
         }
         
@@ -218,7 +223,7 @@ int ibz_mat_howell(int rows, int cols, ibz_t howell[rows][rows+1], ibz_t trans[r
                         ibz_sub(&trans[k][j], &trans[k][j], &u);
                         ibz_mod(&trans[k][j], &trans[k][j], mod);
                     }
-                    assert(howell_check_matrices(rows, cols, howell, trans, mat, mod));
+                    assert(howell_check_matrices(rows, cols, &howell[0][0], &trans[0][0], &mat[0][0], mod));
                 }
             }
         }
@@ -244,7 +249,7 @@ int ibz_mat_howell(int rows, int cols, ibz_t howell[rows][rows+1], ibz_t trans[r
                         ibz_add(&trans[k][0], &trans[k][0], &q);
                         ibz_mod(&trans[k][0], &trans[k][0], mod);
                     }
-                    assert(howell_check_matrices(rows, cols, howell, trans, mat, mod));
+                    assert(howell_check_matrices(rows, cols, &howell[0][0], &trans[0][0], &mat[0][0], mod));
                 }
                 
                 for (int i2 = i-1; i2 >= 0; i2--) {
@@ -254,7 +259,7 @@ int ibz_mat_howell(int rows, int cols, ibz_t howell[rows][rows+1], ibz_t trans[r
                         swap_col(rows, rows+1, howell, 0, i2+1);
                         if (trans) {
                             swap_col(rows+1, rows+1, trans, 0, i2+1);
-                            assert(howell_check_matrices(rows, cols, howell, trans, mat, mod));
+                            assert(howell_check_matrices(rows, cols, &howell[0][0], &trans[0][0], &mat[0][0], mod));
                         }
                         continue;
                     }
@@ -265,7 +270,7 @@ int ibz_mat_howell(int rows, int cols, ibz_t howell[rows][rows+1], ibz_t trans[r
                     //
                     if (trans) {
                         gen_elem(rows, rows+1, trans, 0, i2+1, 0, rows+1, &U, mod);
-                        assert(howell_check_matrices(rows, cols, howell, trans, mat, mod));
+                        assert(howell_check_matrices(rows, cols, &howell[0][0], &trans[0][0], &mat[0][0], mod));
                     }
                 }
             }
@@ -280,7 +285,7 @@ int ibz_mat_howell(int rows, int cols, ibz_t howell[rows][rows+1], ibz_t trans[r
                 swap_col(rows, rows+1, howell, read, write);
                 if (trans) {
                     swap_col(rows+1, rows+1, trans, read, write);
-                    assert(howell_check_matrices(rows, cols, howell, trans, mat, mod));
+                    assert(howell_check_matrices(rows, cols, &howell[0][0], &trans[0][0], &mat[0][0], mod));
                 }
             }
             write--;

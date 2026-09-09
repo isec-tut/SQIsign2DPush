@@ -54,13 +54,14 @@ void quat_left_ideal_copy(quat_left_ideal_t *copy,const quat_left_ideal_t *copie
  * @brief Representing an integer by the quadratic norm form of a maximal extremal order 
  *
  * @param gamma Output: a quaternion element    
- * @param n_gamma Output : target norm of gamma (it is also an input, the final value will be a divisor of the initial value)
+ * @param n_gamma Input: positive target norm, preserved exactly (odd or even)
  * @param Bpoo the quaternion algebra
  *  
  * This algorithm finds a primitive quaternion element gamma of n_gamma inside the standard maximal extremal order
- * Failure is possible
+ * Nonprimitive candidates are retried within the bounded search.
+ * Return 0 on failure and set gamma to zero; n_gamma is unchanged.
  */
-int represent_integer(quat_alg_elem_t *gamma, ibz_t *n_gamma, const quat_alg_t *Bpoo);
+int represent_integer(quat_alg_elem_t *gamma, const ibz_t *n_gamma, const quat_alg_t *Bpoo);
 
 /** @}
 */

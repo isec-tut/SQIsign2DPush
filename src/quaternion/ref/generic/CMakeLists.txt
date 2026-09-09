@@ -3,6 +3,7 @@ set(SOURCE_FILES_QUATERNION_GENERIC_REF
     ideal.c
     dim4.c
     dim2.c
+    sum_of_two_squares.c
     integers.c
     lattice.c
     finit.c

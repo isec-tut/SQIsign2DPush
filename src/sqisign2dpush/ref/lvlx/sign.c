@@ -1,3 +1,4 @@
+#include <encoded_sizes.h>
 #include <curve_extras.h>
 #include <ec.h>
 #include <fips202.h>
@@ -24,12 +25,12 @@
 #define EXPONENT_TWO TORSION_PLUS_EVEN_POWER
 #define EXPONENT_THREE TORSION_PLUS_ODD_POWERS[0]
 
-#define SIGN_TIME_FIELD(field, ...)                                            \
+#define SIGN_TIME_CATEGORY(category, ...)                                      \
   do {                                                                         \
     if (timings) {                                                             \
       clock_t _ts = clock();                                                   \
       __VA_ARGS__;                                                             \
-      timings->field +=                                                        \
+      timings->category +=                                                     \
           (float)(clock() - _ts) * 1000.f / (float)CLOCKS_PER_SEC;             \
     } else {                                                                   \
       __VA_ARGS__;                                                             \
@@ -89,8 +90,7 @@ static void ibz_vec_4_print2(char *name, const ibz_vec_4_t *vec) {
 
 static void fp2_print(char *name, fp2_t const a) {
   fp2_t b;
-  fp2_set(&b, 1);
-  fp2_mul(&b, &b, &a);
+  fp2_frommont(&b, &a);
   printf("%s0x", name);
   for (int i = NWORDS_FIELD - 1; i >= 0; i--)
     printf("%016llx", (unsigned long long)b.re[i]);
@@ -597,13 +597,6 @@ int commit(ec_curve_t *E_com, ec_basis_t *basis_even_com,
                                                    // of
                                                    // BASIS_EVEN
 
-  // if (timings && ret) {
-  //   // fastcommit performs 3 even isogenies and 3 odd isogenies of degree 3^e
-  //   // (when basis_three_image is NULL and basis_two_image is non-NULL)
-  //   timings->total_isog_length_even += 3UL * (unsigned long)EXPONENT_TWO;
-  //   timings->total_isog_length_three += 3UL * (unsigned long)EXPONENT_THREE;
-  // }
-
   // #ifndef NDEBUG
   //     ec_curve_t E_test;
   //     copy_curve(&E_test, &CURVE_E0);
@@ -701,6 +694,11 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
   ec_point_t list_points[3];
   ec_basis_t end_alpha_basis;
 
+  if (timings) {
+    timings->ms_sign_quat +=
+        (float)(clock() - t_cri_setup) * 1000.f / (float)CLOCKS_PER_SEC;
+  }
+
   copy_point(&end_alpha_basis.P, &BASIS_EVEN.P);
   copy_point(&end_alpha_basis.Q, &BASIS_EVEN.Q);
   copy_point(&end_alpha_basis.PmQ, &BASIS_EVEN.PmQ);
@@ -709,11 +707,8 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
   copy_point(&basis_even.P, &BASIS_EVEN.P);
   copy_point(&basis_even.Q, &BASIS_EVEN.Q);
   copy_point(&basis_even.PmQ, &BASIS_EVEN.PmQ);
-  if (timings) {
-    timings->ms_cri_setup +=
-        (float)(clock() - t_cri_setup) * 1000.f / (float)CLOCKS_PER_SEC;
-  }
-  SIGN_TIME_FIELD(ms_cri_basis_even_doubles, {
+
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog, {
     for (int i = 0; i < delta; i++) {
       ec_dbl(&basis_even.P, &CURVE_E0, &basis_even.P);
       ec_dbl(&basis_even.Q, &CURVE_E0, &basis_even.Q);
@@ -740,7 +735,7 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
 
   // inv_pow3_d = (3^e2*d_coprime6)^-1 mod 2^e1
   int res_inv;
-  SIGN_TIME_FIELD(ms_cri_inv_scalar, {
+  SIGN_TIME_CATEGORY(ms_sign_quat, {
     ibz_mul(&inv_scalar, pow3, d_coprime6);
     res_inv = ibz_invmod(&inv_scalar, &inv_scalar, pow2);
   });
@@ -753,26 +748,28 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
   int ok = 0;
 
   int found;
-  SIGN_TIME_FIELD(ms_cri_represent_integer,
+  SIGN_TIME_CATEGORY(ms_sign_quat,
                   found = represent_integer(&alpha, &n_alpha, &QUATALG_PINFTY));
   assert(found);
 
-  SIGN_TIME_FIELD(ms_cri_endomorphism_matrix, {
+  SIGN_TIME_CATEGORY(ms_sign_quat, {
     quat_alg_conj(&alpha_conj, &alpha);
     from_1ijk_to_O0basis(&coeffs, &alpha_conj);
     matrix_of_endomorphism_even(&M_alpha, &alpha);
   });
 
-  // M_alpha = M_alpha * inv_scalar * inv_d mod 2^e1
-  for (int i = 0; i < 2; i++) {
-    for (int j = 0; j < 2; j++) {
-      ibz_mul(&M_alpha[i][j], &M_alpha[i][j], &inv_scalar);
-      // ibz_mul(&M_alpha[i][j], &M_alpha[i][j], &inv_d);
-      ibz_mod(&M_alpha[i][j], &M_alpha[i][j], pow2);
+  SIGN_TIME_CATEGORY(ms_sign_quat, {
+    // M_alpha = M_alpha * inv_scalar * inv_d mod 2^e1
+    for (int i = 0; i < 2; i++) {
+      for (int j = 0; j < 2; j++) {
+        ibz_mul(&M_alpha[i][j], &M_alpha[i][j], &inv_scalar);
+        // ibz_mul(&M_alpha[i][j], &M_alpha[i][j], &inv_d);
+        ibz_mod(&M_alpha[i][j], &M_alpha[i][j], pow2);
+      }
     }
-  }
+  });
 
-  SIGN_TIME_FIELD(ms_cri_matrix_application,
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                   matrix_application_even_basis(&end_alpha_basis, &CURVE_E0,
                                                 &M_alpha, EXPONENT_TWO));
 
@@ -782,7 +779,8 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
 
   // Logic for K3 (3^e2-isogeny kernel)
   ec_point_t K3; // K3 = E0[3^e2] \cap ker(\hat{alpha})
-  SIGN_TIME_FIELD(ms_cri_kernel_three, {
+  {
+    clock_t kernel_start = timings ? clock() : 0;
     ibz_t a, b, tmp, tmp2;
     ibz_init(&a);
     ibz_init(&b);
@@ -841,13 +839,17 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
     //   ibz_finalize(&inv);
     // }
 
-    ec_biscalar_mul_ibz(&K3, &CURVE_E0, &a, &b, &BASIS_THREE);
+    if (timings)
+      timings->ms_sign_quat +=
+          (float)(clock() - kernel_start) * 1000.f / CLOCKS_PER_SEC;
+    SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
+        ec_biscalar_mul_ibz(&K3, &CURVE_E0, &a, &b, &BASIS_THREE));
     ibz_finalize(&a);
     ibz_finalize(&b);
     ibz_finalize(&tmp);
     ibz_finalize(&tmp2);
     ibz_mat_2x2_finalize(&M);
-  });
+  }
 
   // Logic for K2 (2^delta-isogeny kernel)
   if (delta) {
@@ -857,7 +859,8 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
     ibz_mul_2exp(&norm2, &norm2, (uint64_t)delta);
 
     ec_point_t K2; // K2 = E0[2^delta] \cap ker(\hat{alpha})
-    SIGN_TIME_FIELD(ms_cri_kernel_two, {
+    {
+      clock_t kernel_start = timings ? clock() : 0;
       ibz_t a, b, tmp, tmp2;
       ibz_init(&a);
       ibz_init(&b);
@@ -915,7 +918,11 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
       //   ibz_finalize(&inv);
       // }
 
-      ec_biscalar_mul_ibz(&K2, &CURVE_E0, &a, &b, &BASIS_EVEN);
+      if (timings)
+        timings->ms_sign_quat +=
+            (float)(clock() - kernel_start) * 1000.f / CLOCKS_PER_SEC;
+      SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
+          ec_biscalar_mul_ibz(&K2, &CURVE_E0, &a, &b, &BASIS_EVEN));
 
       ibz_finalize(&a);
       ibz_finalize(&b);
@@ -923,8 +930,8 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
       ibz_finalize(&tmp2);
       ibz_mat_2x2_finalize(&M);
       ibz_finalize(&norm2);
-    });
-    SIGN_TIME_FIELD(ms_cri_kernel_two_doubles, {
+    }
+    SIGN_TIME_CATEGORY(ms_sign_ec_non_isog, {
       for (int i = 0; i < (int)EXPONENT_TWO - delta; i++) {
         ec_dbl(&K2, &CURVE_E0, &K2);
       }
@@ -953,9 +960,7 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
     if (timings) {
       float _dt = (float)(clock() - _t_eval_even) * 1000.f /
                   (float)CLOCKS_PER_SEC;
-      timings->ms_cri_eval_even_delta += _dt;
-      timings->ms_aux_isog += _dt;
-      timings->total_isog_length_even_response += (unsigned long)delta;
+      timings->ms_sign_isog += _dt;
     }
 
     copy_point(&K3, pts + 0);
@@ -978,13 +983,11 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
     if (timings) {
       float _dt =
           (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_cri_eval_three_first += _dt;
-      timings->ms_aux_isog += _dt;
+      timings->ms_sign_isog += _dt;
     }
   }
 
   if (timings) {
-    timings->total_isog_length_three_response += (unsigned long)EXPONENT_THREE;
   }
 
   copy_point(&RS.P, &list_points[0]);
@@ -998,7 +1001,7 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
 #endif
 
   ec_basis_t B_can_three;
-  SIGN_TIME_FIELD(ms_cri_basis_three,
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                   ec_curve_to_basis_3(&B_can_three, &E0__));
 
   theta_couple_curve_t E00__;
@@ -1014,7 +1017,7 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
   // }
 
   theta_kernel_couple_points_t dim_two_ker;
-  SIGN_TIME_FIELD(ms_cri_copy_kernel,
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                   copy_bases_to_kernel(&dim_two_ker, &basis_even, &RS));
 
   clock_t t_cri_theta_setup = clock();
@@ -1041,7 +1044,7 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
 
   unsigned length = (unsigned)ibz_get(e_ibz);
   if (timings) {
-    timings->ms_cri_theta_setup +=
+    timings->ms_sign_ec_non_isog +=
         (float)(clock() - t_cri_theta_setup) * 1000.f /
         (float)CLOCKS_PER_SEC;
   }
@@ -1055,15 +1058,11 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
     if (timings) {
       float _dt =
           (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_cri_theta_chain += _dt;
-      timings->ms_aux_isog += _dt;
+      timings->ms_sign_isog += _dt;
     }
   }
 
 
-  if (timings && ret) {
-    timings->total_isog_length_two_two_response += length;
-  }
   if (!ret) {
     printf("theta_chain_compute_and_eval failed\n");
     return 0;
@@ -1083,13 +1082,13 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
   ibz_init(&v_ibz);
 
   // ec_dlog_3(u, v, &image_B_can_three, &K0_, &codomain.E1);
-  SIGN_TIME_FIELD(ms_cri_dlog_3_tate_R,
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                   ec_dlog_3_tate_R(u, v, &image_B_can_three, &K0_,
                                    &codomain.E1, EXPONENT_THREE));
   ibz_copy_digit_array(&u_ibz, u);
   ibz_copy_digit_array(&v_ibz, v);
 
-  SIGN_TIME_FIELD(ms_cri_biscalar_final,
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                   ec_biscalar_mul_ibz(&K0__, &E0__, &u_ibz, &v_ibz,
                                       &B_can_three));
 #ifdef DEBUG
@@ -1114,12 +1113,10 @@ int composed_rand_isog(ec_curve_t *Em__, ec_basis_t *RSm__, ibz_t *d_coprime6,
     if (timings) {
       float _dt =
           (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_cri_eval_three_final += _dt;
-      timings->ms_aux_isog += _dt;
+      timings->ms_sign_isog += _dt;
     }
   }
   if (timings) {
-    timings->total_isog_length_three_response += (unsigned long)EXPONENT_THREE;
   }
 
   copy_point(&RSm__->P, &pts[0]);
@@ -1154,6 +1151,11 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
   ibz_gcd(&gcd6, d_coprime6, &val6);
   assert(ibz_is_one(&gcd6));
 
+  if (timings)
+    timings->ms_sign_quat +=
+        (float)(clock() - t_pri_setup) * 1000.f / CLOCKS_PER_SEC;
+  t_pri_setup = timings ? clock() : 0;
+
   ec_isog_odd_t phi_0;
   ec_curve_t E_m;
   ec_point_t list_points[3];
@@ -1182,7 +1184,7 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
   copy_point(&PQ_m.Q, list_points + 1);
   copy_point(&PQ_m.PmQ, list_points + 2);
   if (timings) {
-    timings->ms_pri_setup +=
+    timings->ms_sign_ec_non_isog +=
         (float)(clock() - t_pri_setup) * 1000.f / (float)CLOCKS_PER_SEC;
   }
 
@@ -1228,7 +1230,7 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
   ibz_set(&ibz_e, e);
   ibz_set(&ibz_delta, delta);
   if (timings) {
-    timings->ms_pri_choose_e +=
+    timings->ms_sign_quat +=
         (float)(clock() - t_pri_choose_e) * 1000.f /
         (float)CLOCKS_PER_SEC;
   }
@@ -1237,10 +1239,10 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
   ec_basis_t RSm__;
 
   int ret;
-  SIGN_TIME_FIELD(ms_pri_composed_rand_isog,
-                  ret = composed_rand_isog(&Em__, &RSm__, d_coprime6,
+  // The callee records its own category timings.
+  ret = composed_rand_isog(&Em__, &RSm__, d_coprime6,
                                            kernel_phicom1, &ibz_e, &ibz_delta,
-                                           pow2, pow3, timings));
+                                           pow2, pow3, timings);
   if (!ret) {
     return 0;
   }
@@ -1254,7 +1256,7 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
   //   ec_normalize_curve(&(Emm__.E2));
   // }
 
-  SIGN_TIME_FIELD(ms_pri_delta_doubles, {
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog, {
     for (int i = 0; i < delta; i++) {
       ec_dbl(&PQ_m_even.P, &E_m, &PQ_m_even.P);
       ec_dbl(&PQ_m_even.Q, &E_m, &PQ_m_even.Q);
@@ -1263,7 +1265,7 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
   });
 
   theta_kernel_couple_points_t dim_two_ker;
-  SIGN_TIME_FIELD(ms_pri_copy_kernel,
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                   copy_bases_to_kernel(&dim_two_ker, &PQ_m_even, &RSm__));
 
   clock_t t_pri_theta_setup = clock();
@@ -1289,7 +1291,7 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
 
   unsigned length = (unsigned)ibz_get(&ibz_e);
   if (timings) {
-    timings->ms_pri_theta_setup +=
+    timings->ms_sign_ec_non_isog +=
         (float)(clock() - t_pri_theta_setup) * 1000.f /
         (float)CLOCKS_PER_SEC;
   }
@@ -1302,14 +1304,10 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
     if (timings) {
       float _dt =
           (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_pri_theta_chain += _dt;
-      timings->ms_aux_isog += _dt;
+      timings->ms_sign_isog += _dt;
     }
   }
 
-  if (timings && ret) {
-    timings->total_isog_length_two_two_response += length;
-  }
   if (!ret) {
     printf("theta_chain_compute_and_eval failed\n");
     return 0;
@@ -1332,7 +1330,7 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
   digit_t digit_d[NWORDS_ORDER] = {0};
   fp2_t test_powa;
   int res1, res2;
-  SIGN_TIME_FIELD(ms_pri_weil, {
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog, {
     weil(&w0a, EXPONENT_TWO, &PQ_m.P, &PQ_m.Q, &PQ_m.PmQ, &Emm__.E1);
     weil(&w1a, EXPONENT_TWO, &pushed_points[0].P1, &pushed_points[1].P1,
          &pushed_points[2].P1, &codomain.E1);
@@ -1352,7 +1350,7 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
   ec_point_t kernel_psim_;
   ec_curve_t Em_;
 
-  SIGN_TIME_FIELD(ms_pri_select_codomain, {
+  SIGN_TIME_CATEGORY(ms_sign_ec_non_isog, {
     if (res1) {
       copy_curve(&Em_, &codomain.E1);
       copy_point(&push_pts[0], &pushed_points[0].P1);
@@ -1377,12 +1375,10 @@ int pushrandisog(ec_curve_t *E_aux, ec_basis_t *image, ibz_t *d_coprime6,
     if (timings) {
       float _dt =
           (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-      timings->ms_pri_eval_three += _dt;
-      timings->ms_aux_isog += _dt;
+      timings->ms_sign_isog += _dt;
     }
   }
   if (timings) {
-    timings->total_isog_length_three_response += (unsigned long)EXPONENT_THREE;
   }
 
   copy_point(&image->P, &push_pts[0]);
@@ -1491,6 +1487,334 @@ void norm_from_2_times_gram(ibz_t *norm, ibz_mat_4x4_t *gram,
   ibz_div_2exp(norm, norm, 1);
 }
 
+// /*
+//  * The Julia implementation of element_for_response enumerates the vectors in
+//  * the LLL-reduced lattice with a Fincke-Pohst style search.  The following
+//  * small helpers are the C equivalent of the Rational{BigInt} operations used
+//  * by that implementation.
+//  */
+// static void response_floor_rational(ibz_t *result, const ibq_t *value) {
+//   ibz_t numerator, denominator, remainder;
+//   ibz_init(&numerator);
+//   ibz_init(&denominator);
+//   ibz_init(&remainder);
+//   ibq_num(&numerator, value);
+//   ibq_denom(&denominator, value);
+//   ibz_div_floor(result, &remainder, &numerator, &denominator);
+//   ibz_finalize(&numerator);
+//   ibz_finalize(&denominator);
+//   ibz_finalize(&remainder);
+// }
+
+// static void response_ceil_rational(ibz_t *result, const ibq_t *value) {
+//   ibq_t neg_value;
+//   ibz_t floor_neg;
+//   ibq_init(&neg_value);
+//   ibz_init(&floor_neg);
+//   ibq_neg(&neg_value, value);
+//   response_floor_rational(&floor_neg, &neg_value);
+//   ibz_neg(result, &floor_neg);
+//   ibq_finalize(&neg_value);
+//   ibz_finalize(&floor_neg);
+// }
+
+// static void response_set_q_from_ibz(ibq_t *result, const ibz_t *value) {
+//   ibz_t one;
+//   ibz_init(&one);
+//   ibz_set(&one, 1);
+//   ibq_set(result, value, &one);
+//   ibz_finalize(&one);
+// }
+
+// static void response_set_q_zero(ibq_t *result) {
+//   response_set_q_from_ibz(result, &ibz_const_zero);
+// }
+
+// /* Set the bounds for one coordinate in the Julia enumeration. */
+// static void response_set_coordinate_bounds(ibz_t *lower, ibz_t *upper,
+//                                            const ibq_t *s, const ibq_t *u,
+//                                            const ibq_t *qii) {
+//   ibz_t denominator_u, denominator_u_squared, one, tmp_int, z_int;
+//   ibq_t tmp, denominator_q, z, z_plus_u, z_minus_u;
+
+//   ibz_init(&denominator_u);
+//   ibz_init(&denominator_u_squared);
+//   ibz_init(&one);
+//   ibz_init(&tmp_int);
+//   ibz_init(&z_int);
+//   ibq_init(&tmp);
+//   ibq_init(&denominator_q);
+//   ibq_init(&z);
+//   ibq_init(&z_plus_u);
+//   ibq_init(&z_minus_u);
+
+//   ibq_denom(&denominator_u, u);
+//   ibz_mul(&denominator_u_squared, &denominator_u, &denominator_u);
+//   ibz_set(&one, 1);
+//   ibq_set(&denominator_q, &denominator_u_squared, &one);
+
+//   /* Julia uses div(S*denominator(U)^2, q[i,i]) here. */
+//   ibq_mul(&tmp, s, &denominator_q);
+//   ibq_div(&tmp, &tmp, qii);
+//   response_floor_rational(&tmp_int, &tmp);
+//   if (ibz_cmp(&tmp_int, &ibz_const_zero) < 0) {
+//     ibz_set(&tmp_int, 0);
+//   }
+//   ibz_sqrt_floor(&z_int, &tmp_int);
+//   ibq_set(&z, &z_int, &denominator_u);
+
+//   ibq_sub(&z_minus_u, &z, u);
+//   response_floor_rational(upper, &z_minus_u);
+
+//   ibq_add(&z_plus_u, &z, u);
+//   response_ceil_rational(lower, &z_plus_u);
+//   ibz_sub(lower, lower, &one);
+
+//   ibz_finalize(&denominator_u);
+//   ibz_finalize(&denominator_u_squared);
+//   ibz_finalize(&one);
+//   ibz_finalize(&tmp_int);
+//   ibz_finalize(&z_int);
+//   ibq_finalize(&tmp);
+//   ibq_finalize(&denominator_q);
+//   ibq_finalize(&z);
+//   ibq_finalize(&z_plus_u);
+//   ibq_finalize(&z_minus_u);
+// }
+
+// /* Construct the triangular quadratic form used by Julia's
+//  * make_quadratic_form_coeffs.  gram evaluates twice the normalized norm, so
+//  * C is gram/2 here. */
+// static void response_make_quadratic_form(ibq_t q[4][4],
+//                                          const ibz_mat_4x4_t *gram) {
+//   ibq_t c[4][4];
+//   ibq_t term, sum;
+//   ibz_t two;
+
+//   ibz_init(&two);
+//   ibz_set(&two, 2);
+//   ibq_init(&term);
+//   ibq_init(&sum);
+//   for (int i = 0; i < 4; i++) {
+//     for (int j = 0; j < 4; j++) {
+//       ibq_init(&c[i][j]);
+//       ibq_init(&q[i][j]);
+//       ibq_set(&c[i][j], &(*gram)[i][j], &two);
+//     }
+//   }
+
+//   for (int i = 0; i < 4; i++) {
+//     response_set_q_zero(&sum);
+//     for (int k = 0; k < i; k++) {
+//       ibq_mul(&term, &q[k][k], &q[k][i]);
+//       ibq_mul(&term, &term, &q[k][i]);
+//       ibq_add(&sum, &sum, &term);
+//     }
+//     ibq_sub(&q[i][i], &c[i][i], &sum);
+
+//     for (int j = i + 1; j < 4; j++) {
+//       response_set_q_zero(&sum);
+//       for (int k = 0; k < i; k++) {
+//         ibq_mul(&term, &q[k][k], &q[k][i]);
+//         ibq_mul(&term, &term, &q[k][j]);
+//         ibq_add(&sum, &sum, &term);
+//       }
+//       ibq_sub(&term, &c[i][j], &sum);
+//       ibq_div(&q[i][j], &term, &q[i][i]);
+//     }
+//   }
+
+//   for (int i = 0; i < 4; i++) {
+//     for (int j = 0; j < 4; j++) {
+//       ibq_finalize(&c[i][j]);
+//     }
+//   }
+//   ibq_finalize(&term);
+//   ibq_finalize(&sum);
+//   ibz_finalize(&two);
+// }
+
+// static void response_make_primitive(ibz_vec_4_t *primitive,
+//                                     const ibz_vec_4_t *vector) {
+//   ibz_t gcd, absolute, remainder;
+//   ibz_init(&gcd);
+//   ibz_init(&absolute);
+//   ibz_init(&remainder);
+//   ibz_set(&gcd, 0);
+
+//   for (int i = 0; i < 4; i++) {
+//     ibz_abs(&absolute, &(*vector)[i]);
+//     if (ibz_is_zero(&gcd)) {
+//       ibz_copy(&gcd, &absolute);
+//     } else {
+//       ibz_gcd(&gcd, &gcd, &absolute);
+//     }
+//   }
+
+//   for (int i = 0; i < 4; i++) {
+//     ibz_div(&(*primitive)[i], &remainder, &(*vector)[i], &gcd);
+//   }
+
+//   ibz_finalize(&gcd);
+//   ibz_finalize(&absolute);
+//   ibz_finalize(&remainder);
+// }
+
+// int sample_response(quat_alg_elem_t *x, const quat_lattice_t *lattice,
+//                     ibz_t const *lattice_content, int verbose,
+//                     sign_timings_t *timings) {
+//   ibz_mat_4x4_t lll;
+//   ibz_t denom_gram, norm, norm_bound;
+
+//   ibz_mat_4x4_init(&lll);
+//   ibz_init(&denom_gram);
+//   ibz_init(&norm);
+//   ibz_init(&norm_bound);
+
+//   ibz_pow(&norm_bound, &ibz_const_two, EXPONENT_TWO);
+
+//   // Upper bound on log(determinant)
+//   int logdet = 0;
+//   for (int i = 0; i < 4; i++) {
+//     int max = 0;
+//     for (int j = 0; j < 4; j++) {
+//       int s = ibz_bitsize(&lattice->basis[i][j]);
+//       max = s > max ? s : max;
+//     }
+//     logdet += max;
+//   }
+
+//   int err = quat_lattice_lll(&lll, lattice, &(QUATALG_PINFTY.p), 2 * logdet);
+//   assert(!err);
+//   // The shortest vector found by lll is a candidate
+
+//   int found = 0;
+
+//   ibz_mat_4x4_t prod, gram;
+//   ibz_mat_4x4_init(&prod);
+//   ibz_mat_4x4_init(&gram);
+
+//   ibz_mat_4x4_transpose(&prod, &lll);
+//   ibz_mat_4x4_mul(&prod, &prod, &(QUATALG_PINFTY.gram));
+//   ibz_mat_4x4_mul(&gram, &prod, &lll);
+
+//   ibz_copy(&denom_gram, &(lattice->denom));
+//   ibz_mul(&denom_gram, &denom_gram, &(lattice->denom));
+//   ibz_mul(&denom_gram, &denom_gram, lattice_content);
+
+//   assert(ibz_is_even(&denom_gram));
+//   ibz_div_2exp(&denom_gram, &denom_gram, 1);
+
+//   int divides = ibz_mat_4x4_scalar_div(&gram, &denom_gram, &gram);
+//   assert(divides);
+
+//   ibz_copy(&(x->denom), &(lattice->denom));
+
+//   ibz_vec_4_t vec, primitive;
+//   ibz_vec_4_init(&vec);
+//   ibz_vec_4_init(&primitive);
+
+//   ibq_t q[4][4], s[4], u[4];
+//   ibz_t lower[4], upper[4], one;
+//   for (int i = 0; i < 4; i++) {
+//     ibq_init(&s[i]);
+//     ibq_init(&u[i]);
+//     ibz_init(&lower[i]);
+//     ibz_init(&upper[i]);
+//     response_set_q_zero(&s[i]);
+//     response_set_q_zero(&u[i]);
+//     ibz_set(&vec[i], 0);
+//   }
+//   ibz_init(&one);
+//   ibz_set(&one, 1);
+//   response_make_quadratic_form(q, &gram);
+//   response_set_q_from_ibz(&s[3], &norm_bound);
+//   response_set_coordinate_bounds(&lower[3], &upper[3], &s[3], &u[3],
+//                                  &q[3][3]);
+
+//   /* This is the same exhaustive search as element_for_response in Julia. */
+//   int level = 3;
+//   int exhausted = 0;
+//   while (!found && !exhausted) {
+//     ibz_add(&vec[level], &vec[level], &one);
+//     while (ibz_cmp(&vec[level], &upper[level]) > 0) {
+//       if (level == 3) {
+//         exhausted = 1;
+//         break;
+//       }
+//       level++;
+//       ibz_add(&vec[level], &vec[level], &one);
+//     }
+//     if (exhausted) {
+//       break;
+//     }
+
+//     if (level > 0) {
+//       ibq_t shifted, shifted_squared, contribution;
+//       ibq_init(&shifted);
+//       ibq_init(&shifted_squared);
+//       ibq_init(&contribution);
+//       response_set_q_from_ibz(&shifted, &vec[level]);
+//       ibq_add(&shifted, &shifted, &u[level]);
+//       ibq_mul(&shifted_squared, &shifted, &shifted);
+//       ibq_mul(&contribution, &q[level][level], &shifted_squared);
+//       ibq_sub(&s[level - 1], &s[level], &contribution);
+//       level--;
+//       response_set_q_zero(&u[level]);
+//       for (int j = level + 1; j < 4; j++) {
+//         response_set_q_from_ibz(&shifted, &vec[j]);
+//         ibq_mul(&contribution, &q[level][j], &shifted);
+//         ibq_add(&u[level], &u[level], &contribution);
+//       }
+//       response_set_coordinate_bounds(&lower[level], &upper[level],
+//                                      &s[level], &u[level], &q[level][level]);
+//       ibz_copy(&vec[level], &lower[level]);
+//       ibz_sub(&vec[level], &vec[level], &one);
+//       ibq_finalize(&shifted);
+//       ibq_finalize(&shifted_squared);
+//       ibq_finalize(&contribution);
+//     } else {
+//       int nonzero = !ibz_is_zero(&vec[0]) || !ibz_is_zero(&vec[1]) ||
+//                     !ibz_is_zero(&vec[2]) || !ibz_is_zero(&vec[3]);
+//       if (nonzero) {
+//         response_make_primitive(&primitive, &vec);
+//         norm_from_2_times_gram(&norm, &gram, &primitive);
+//         if (is_good_norm_2dpush(&norm)) {
+//           ibz_mat_4x4_eval(&(x->coord), &lll, &primitive);
+//           found = 1;
+//         }
+//       }
+//     }
+//   }
+
+//   for (int i = 0; i < 4; i++) {
+//     ibq_finalize(&s[i]);
+//     ibq_finalize(&u[i]);
+//     ibz_finalize(&lower[i]);
+//     ibz_finalize(&upper[i]);
+//   }
+//   for (int i = 0; i < 4; i++) {
+//     for (int j = 0; j < 4; j++) {
+//       ibq_finalize(&q[i][j]);
+//     }
+//   }
+//   ibz_finalize(&one);
+// #ifndef NDEBUG
+//   printf("good sample found by deterministic lattice enumeration\n");
+// #endif
+//   // assert(quat_lattice_contains(NULL, lattice, x, &QUATALG_PINFTY));
+
+//   ibz_finalize(&denom_gram);
+//   ibz_finalize(&norm);
+//   ibz_mat_4x4_finalize(&prod);
+//   ibz_mat_4x4_finalize(&gram);
+//   ibz_mat_4x4_finalize(&lll);
+//   ibz_vec_4_finalize(&vec);
+//   ibz_vec_4_finalize(&primitive);
+//   ibz_finalize(&norm_bound);
+//   return found;
+// }
+
 int sample_response(quat_alg_elem_t *x, const quat_lattice_t *lattice,
                     ibz_t const *lattice_content, int verbose,
                     sign_timings_t *timings) {
@@ -1586,9 +1910,6 @@ int sample_response(quat_alg_elem_t *x, const quat_lattice_t *lattice,
   ibz_mat_4x4_finalize(&lll);
   ibz_vec_4_finalize(&vec);
   ibz_finalize(&norm_bound);
-  if (timings) {
-    timings->total_sample_response_trials += (unsigned long)cnt;
-  }
   return found;
 }
 
@@ -1601,23 +1922,25 @@ void hash_to_challenge(ibz_vec_2_t *scalars, const ec_curve_t *curve,
   ibz_init(&pow3);
   ibz_pow(&pow3, &ibz_const_three, EXPONENT_THREE);
 
-  unsigned char *buf = malloc(sizeof(fp2_t) + sizeof(fp2_t) + length);
+  unsigned char *buf = malloc(2 * FP2_ENCODED_BYTES + length);
   {
     fp2_t j1, j2;
     ec_j_inv(&j1, curve);
     ec_j_inv(&j2, &pk->curve);
-    memcpy(buf, &j1, sizeof(j1));
-    memcpy(buf + sizeof(j1), &j2, sizeof(j2));
-    memcpy(buf + sizeof(j1) + sizeof(j2), message, length);
+    fp_encode_legacy_hash(buf, j1.re);
+    fp_encode_legacy_hash(buf + FP_ENCODED_BYTES, j1.im);
+    fp_encode_legacy_hash(buf + FP2_ENCODED_BYTES, j2.re);
+    fp_encode_legacy_hash(buf + FP2_ENCODED_BYTES + FP_ENCODED_BYTES, j2.im);
+    memcpy(buf + 2 * FP2_ENCODED_BYTES, message, length);
   }
 
   // TODO(security) omit some vectors, notably (a,1) with gcd(a,6)!=1 but
   // also things like (2,3)?
   {
-    digit_t digits[NWORDS_FIELD] = {0};
+    digit_t digits[NWORDS_ORDER] = {0};
 
     // FIXME should use SHAKE128 for smaller parameter sets?
-    sha3_256((void *)digits, buf, sizeof(fp2_t) + sizeof(fp2_t) + length);
+    sha3_256((void *)digits, buf, 2 * FP2_ENCODED_BYTES + length);
 
     for (int i = 2; i < HASH_ITERATIONS; i++) {
       sha3_256((void *)digits, (void *)digits, sizeof(digits));
@@ -1642,92 +1965,12 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
 
   // Initialize timing accumulators
   if (timings) {
+    timings->ms_sign_isog = 0.f;
+    timings->ms_sign_ec_non_isog = 0.f;
+    timings->ms_sign_quat = 0.f;
     timings->ms_commit = 0.f;
     timings->ms_challenge = 0.f;
     timings->ms_response = 0.f;
-    timings->ms_aux = 0.f;
-    timings->ms_hash_to_challenge = 0.f;
-    timings->ms_challenge_biscalar = 0.f;
-    timings->ms_challenge_eval_three = 0.f;
-    timings->ms_challenge_ideal = 0.f;
-    timings->ms_challenge_lideal_inter = 0.f;
-    timings->ms_challenge_lideal_mul = 0.f;
-    timings->ms_generator_coprime = 0.f;
-    timings->ms_lideal_mul_tmp = 0.f;
-    timings->ms_lideal_isom = 0.f;
-    timings->ms_lideal_conjugate_lattice = 0.f;
-    timings->ms_lattice_intersect = 0.f;
-    timings->ms_sample_response = 0.f;
-    timings->ms_response_quat_mul = 0.f;
-    timings->ms_response_matrix = 0.f;
-    timings->ms_response_matrix_apply = 0.f;
-    timings->ms_response_basis_hint = 0.f;
-    timings->ms_response_change_basis = 0.f;
-    timings->ms_aux_norm = 0.f;
-    timings->ms_pushrandisog = 0.f;
-    timings->ms_pri_setup = 0.f;
-    timings->ms_pri_choose_e = 0.f;
-    timings->ms_pri_composed_rand_isog = 0.f;
-    timings->ms_pri_delta_doubles = 0.f;
-    timings->ms_pri_copy_kernel = 0.f;
-    timings->ms_pri_theta_setup = 0.f;
-    timings->ms_pri_theta_chain = 0.f;
-    timings->ms_pri_weil = 0.f;
-    timings->ms_pri_select_codomain = 0.f;
-    timings->ms_pri_eval_three = 0.f;
-    timings->ms_cri_setup = 0.f;
-    timings->ms_cri_basis_even_doubles = 0.f;
-    timings->ms_cri_inv_scalar = 0.f;
-    timings->ms_cri_represent_integer = 0.f;
-    timings->ms_cri_endomorphism_matrix = 0.f;
-    timings->ms_cri_matrix_application = 0.f;
-    timings->ms_cri_kernel_three = 0.f;
-    timings->ms_cri_kernel_two = 0.f;
-    timings->ms_cri_kernel_two_doubles = 0.f;
-    timings->ms_cri_eval_even_delta = 0.f;
-    timings->ms_cri_eval_three_first = 0.f;
-    timings->ms_cri_basis_three = 0.f;
-    timings->ms_cri_copy_kernel = 0.f;
-    timings->ms_cri_theta_setup = 0.f;
-    timings->ms_cri_theta_chain = 0.f;
-    timings->ms_cri_dlog_3_tate_R = 0.f;
-    timings->ms_cri_biscalar_final = 0.f;
-    timings->ms_cri_eval_three_final = 0.f;
-    timings->ms_aux_odd_adjust = 0.f;
-    timings->ms_aux_basis_hint = 0.f;
-    timings->ms_aux_change_basis = 0.f;
-    timings->ms_aux_matrix_finalize = 0.f;
-    timings->ms_fc_represent_integer = 0.f;
-    timings->ms_fc_lideal_create = 0.f;
-    timings->ms_fc_quat_to_isog_two = 0.f;
-    timings->ms_fc_quat_to_kernel_three = 0.f;
-    timings->ms_fc_quat_to_isog_three = 0.f;
-    timings->ms_fc_quat_to_kernel_two = 0.f;
-    timings->ms_fc_quat_to_quat = 0.f;
-    timings->ms_fc_quat_to_ec = 0.f;
-    timings->ms_fc_quat_to_other = 0.f;
-    timings->ms_fc_biscalar1 = 0.f;
-    timings->ms_fc_complete_three_basis = 0.f;
-    timings->ms_fc_eval_even1 = 0.f;
-    timings->ms_fc_eval_three1 = 0.f;
-    timings->ms_fc_eval_three2 = 0.f;
-    timings->ms_fc_curve_to_basis_3 = 0.f;
-    timings->ms_fc_biscalar2 = 0.f;
-    timings->ms_fc_eval_even2 = 0.f;
-    timings->ms_fc_dlog_3_tate_R = 0.f;
-    timings->ms_fc_biscalar3 = 0.f;
-    timings->ms_fc_eval_three3 = 0.f;
-    timings->total_sample_response_trials = 0UL;
-    timings->total_isog_length_even_commit = 0UL;
-    timings->total_isog_length_three_commit = 0UL;
-    timings->total_isog_length_three_challenge = 0UL;
-    timings->total_isog_length_even_response = 0UL;
-    timings->total_isog_length_three_response = 0UL;
-    timings->total_isog_length_two_two_response = 0UL;
-    timings->ms_commit_isog = 0.f;
-    timings->ms_challenge_isog = 0.f;
-    timings->ms_response_isog = 0.f;
-    timings->ms_aux_isog = 0.f;
   }
 
   ibz_t lattice_content;
@@ -1744,6 +1987,7 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
   ibz_mat_2x2_t mat_alpha0, mat_Bcom0_to_Bcom;
   ibz_mat_2x2_t mat_sigma_phichall_BA_to_Bcomcan,
       mat_sigma_phichall_BA0_to_Bcom0;
+  ibz_mat_2x2_t mat_BAcan_to_BA0_two, mat_BAcan_to_BA0_three;
   ibz_t degree_com_isogeny, tmp;
 
   ibz_init(&degree_com_isogeny);
@@ -1754,6 +1998,8 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
   ibz_mat_2x2_init(&mat_Bcom0_to_Bcom);
   ibz_mat_2x2_init(&mat_sigma_phichall_BA_to_Bcomcan);
   ibz_mat_2x2_init(&mat_sigma_phichall_BA0_to_Bcom0);
+  ibz_mat_2x2_init(&mat_BAcan_to_BA0_two);
+  ibz_mat_2x2_init(&mat_BAcan_to_BA0_three);
 
   quat_alg_elem_init(&resp_quat);
   quat_alg_elem_init(&resp_quat_2dpush);
@@ -1774,9 +2020,15 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
   ibz_init(&pow2);
   ibz_init(&pow3);
 
+  clock_t t_start, t_end, t_step;
+
   ibz_pow(&pow2, &ibz_const_two, EXPONENT_TWO);     // pow2 = 2^e1
   ibz_pow(&pow3, &ibz_const_three, EXPONENT_THREE); // pow3 = 3^e2
 
+  // protocols_sign() returns 0 on success and 1 on failure.  The helper
+  // functions used below use the opposite convention (1 on success).  The
+  // outer retry loop follows the Julia implementation and keeps retrying
+  // until a valid response is found.
   int ret = 0;
 
   ec_basis_t Bpk_can2, Bpk_can3_fix, Bchl;
@@ -1785,40 +2037,44 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
   //     &Bpk_can2, &pk->curve, TORSION_PLUS_EVEN_POWER, pk->hint_pk_even);
   // assert(ok);
 
+  if (timings)
+    t_start = clock();
   int ok = ec_curve_to_basis_3f_from_hint(&Bpk_can3_fix, &pk->curve,
                                       pk->hint_pk_three);
   assert(ok);
+  if (timings) {
+    t_end = clock();
+    timings->ms_sign_ec_non_isog +=
+        (float)(t_end - t_start) * 1000.f / (float)CLOCKS_PER_SEC;
+  }
 
-
-  ibz_mat_2x2_t mat_BAcan_to_BA0_two, mat_BAcan_to_BA0_three;
-  ibz_mat_2x2_init(&mat_BAcan_to_BA0_two);
-  ibz_mat_2x2_init(&mat_BAcan_to_BA0_three);
-
-  // ibz_2x2_inv_mod(&mat_BAcan_to_BA0_two, &(sk->mat_BAcan_to_BA0_two), &pow2);
-
-  // (Ppk_fix, Qpk_fix) = (phi_sk(P0), phi_sk(Q0))^T * mat_BAcan_to_BA0_two
-  // Bpk_can2.P = phi_sk(P0)
-  // Bpk_can2.Q = phi_sk(Q0)
+  // Bpk_can2.P = phi_sk2(P0_EVEN)
+  // Bpk_can2.Q = phi_sk2(Q0_EVEN)
   copy_point(&Bpk_can2.P, &(sk->phi_sk2_three.P));
   copy_point(&Bpk_can2.Q, &(sk->phi_sk2_three.Q));
   copy_point(&Bpk_can2.PmQ, &(sk->phi_sk2_three.PmQ));
-  // matrix_application_even_basis(&Bpk_can2, &(pk->curve), &mat_BAcan_to_BA0_two,
-  //                               EXPONENT_TWO);
 
   while (!ret) {
     // ---- commit ----
-    clock_t t_step = clock();
+    t_start = clock();
     ret =
         commit(&E_com, &Bcom0, &lideal_commit_three, &kernel_isocom_three1,
                &kernel_isocom_three2, &E_com_mid, &Bcom0_mid, verbose, timings);
-    if (timings)
+    if (timings){
+      t_end = clock();
       timings->ms_commit +=
-          (float)(clock() - t_step) * 1000.f / (float)CLOCKS_PER_SEC;
+          (float)(t_end - t_start) * 1000.f / (float)CLOCKS_PER_SEC;
+    }
+
+    // Do not derive a challenge from an unsuccessful commitment.  In
+    // particular, E_com and the commitment ideal may not contain valid
+    // outputs when commit() reports failure.
+    if (!ret)
+      continue;
 
     // ---- challenge ----
     t_step = clock();
-    SIGN_TIME_FIELD(ms_hash_to_challenge,
-                    hash_to_challenge(&vec_can, &E_com, m, pk, l));
+    hash_to_challenge(&vec_can, &E_com, m, pk, l);
     if (timings)
       timings->ms_challenge +=
           (float)(clock() - t_step) * 1000.f / (float)CLOCKS_PER_SEC;
@@ -1828,7 +2084,7 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
     t_step = clock();
     // the kernel of the challenge isogeny is generated by vec_can[0]*B[0] +
     // vec_can[1]*B[1] where B is the canonical basis of the 3^e2 torsion of Epk
-    SIGN_TIME_FIELD(ms_challenge_biscalar,
+    SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                     ec_biscalar_mul_ibz(&kernel_chl, &pk->curve, &vec_can[0],
                                         &vec_can[1], &Bpk_can3_fix));
 #ifdef DEBUG
@@ -1849,13 +2105,8 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
       if (timings) {
         float _dt =
             (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-        timings->ms_challenge_eval_three += _dt;
-        timings->ms_challenge_isog += _dt;
+        timings->ms_sign_isog += _dt;
       }
-    }
-    if (timings) {
-      timings->total_isog_length_three_challenge +=
-          (unsigned long)EXPONENT_THREE;
     }
     // Bchl.P = phi_chl(phi_sk(P))
     // Bchl.Q = phi_chl(phi_sk(Q))
@@ -1863,15 +2114,17 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
     copy_point(&Bchl.Q, pts + 1);
     copy_point(&Bchl.PmQ, pts + 2);
 
-    ibz_2x2_inv_mod(&mat_BAcan_to_BA0_three, &(sk->mat_BAcan_to_BA0_three),
-                  &pow3);
-    ibz_mat_2x2_eval(&vec, &(sk->mat_BAcan_to_BA0_three), &vec_can);
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
+      ibz_2x2_inv_mod(&mat_BAcan_to_BA0_three, &(sk->mat_BAcan_to_BA0_three),
+                    &pow3);
+      ibz_mat_2x2_eval(&vec, &(sk->mat_BAcan_to_BA0_three), &vec_can);
+    });
     // the kernel of the challenge isogeny is generated by vec[0]*B0[0] +
     // vec[1]*B0[1] where B0 is the image through secret isogeny of the
     // canonical basis E0
 
     // t = tic();
-    SIGN_TIME_FIELD(ms_challenge_ideal,
+    SIGN_TIME_CATEGORY(ms_sign_quat,
                     id2iso_kernel_dlogs_to_ideal_three(&lideal_chall_three,
                                                        &vec));
 #ifdef DEBUG
@@ -1879,16 +2132,17 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
 #endif
     // TODO(optimization): only 3-torsion is used. Can optimise
 
-    SIGN_TIME_FIELD(ms_challenge_lideal_inter,
+    SIGN_TIME_CATEGORY(ms_sign_quat,
                     quat_lideal_inter(&lideal_chall3_secret2,
                                       &lideal_chall_three,
                                       &(sk->secret_ideal_two),
                                       &QUATALG_PINFTY));
-    SIGN_TIME_FIELD(ms_challenge_lideal_mul,
-                    quat_lideal_mul(&lideal_chall3_secret3,
-                                    &lideal_chall3_secret2,
-                                    &(sk->two_to_three_transporter),
-                                    &QUATALG_PINFTY, 0));
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
+      int direct_mul_ok = quat_lideal_mul_direct(
+          &lideal_chall3_secret3, &lideal_chall3_secret2,
+          &(sk->two_to_three_transporter), &QUATALG_PINFTY);
+      assert(direct_mul_ok);
+    });
 
     // Careful: want to intersect lideal_chall3_secret3 and
     // dual(lideal_commit_three) Both have norm a power of three, so trouble!!
@@ -1896,58 +2150,94 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
     // coprime to 3; compute intersection with that, then sample in there, and
     // transport the result back to the wanted intersection
 
-    SIGN_TIME_FIELD(ms_generator_coprime,
+    SIGN_TIME_CATEGORY(ms_sign_quat,
                     quat_lideal_generator_coprime(
                         &elem_tmp, &lideal_chall3_secret3, &ibz_const_one,
                         &QUATALG_PINFTY, 0));
-    quat_alg_conj(&elem_tmp, &elem_tmp);
-    ibz_mul(&(elem_tmp.denom), &(elem_tmp.denom),
-            &(lideal_chall3_secret3.norm));
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
+      quat_alg_conj(&elem_tmp, &elem_tmp);
+      ibz_mul(&(elem_tmp.denom), &(elem_tmp.denom),
+              &(lideal_chall3_secret3.norm));
+    });
 
-    SIGN_TIME_FIELD(ms_lideal_mul_tmp,
-                    quat_lideal_mul(&lideal_tmp, &lideal_chall3_secret3,
-                                    &elem_tmp, &QUATALG_PINFTY, 0));
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
+      int direct_mul_ok = quat_lideal_mul_direct(
+          &lideal_tmp, &lideal_chall3_secret3, &elem_tmp, &QUATALG_PINFTY);
+      assert(direct_mul_ok);
+    });
     int test;
-    SIGN_TIME_FIELD(ms_lideal_isom,
+    SIGN_TIME_CATEGORY(ms_sign_quat,
                     test = quat_lideal_isom(&elem_tmp, &lideal_tmp,
                                             &lideal_chall3_secret3,
                                             &QUATALG_PINFTY));
     assert(test);
 
-    SIGN_TIME_FIELD(ms_lideal_conjugate_lattice,
+    SIGN_TIME_CATEGORY(ms_sign_quat,
                     quat_lideal_conjugate_lattice(&lat_commit,
                                                   &lideal_commit_three));
 
-    SIGN_TIME_FIELD(ms_lattice_intersect,
-                    quat_lattice_intersect(&lattice_hom_chall_to_com,
-                                           &lideal_tmp.lattice, &lat_commit));
-    // this lattice contains all isogenies that start with chall3_secret3 and
-    // end with dual(commit_three)
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
+      /* conjugation maps the HNF basis of the commitment left ideal to a
+       * right-ideal basis.  Restore HNF before passing it to lattice helpers. */
+      quat_lattice_hnf(&lat_commit);
 
-    ibz_mul(&lattice_content, &(lideal_tmp.norm), &(lideal_commit_three.norm));
+      /* Let I' = lideal_tmp and C = lideal_commit_three.  I' was chosen with
+       * gcd(N(I'), N(C)) = 1, hence the compatible right/left ideal product
+       *
+       *              conjugate(C) * I'
+       *
+       * equals the Hom lattice I' intersect conjugate(C).  The order matters:
+       * conjugate(C) is a right ideal and I' is a left ideal. */
+      quat_lattice_mul(&lattice_hom_chall_to_com, &lat_commit,
+                       &lideal_tmp.lattice, &QUATALG_PINFTY);
+    });
+
+#ifndef NDEBUG
+    {
+      quat_lattice_t intersection_check;
+      quat_lattice_init(&intersection_check);
+      quat_lattice_intersect(&intersection_check, &lideal_tmp.lattice,
+                             &lat_commit);
+      assert(quat_lattice_equal(&lattice_hom_chall_to_com,
+                                &intersection_check));
+      quat_lattice_finalize(&intersection_check);
+    }
+#endif
+
+    // This lattice contains all isogenies from chall3_secret3 to
+    // dual(commit_three), represented as conjugate(C) * I'.
+
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
+      ibz_mul(&lattice_content, &(lideal_tmp.norm), &(lideal_commit_three.norm));
+    });
     if (verbose)
       TOC(t, "sample_response in");
 
     // 失敗したら commit からやりなおす
-    SIGN_TIME_FIELD(ms_sample_response,
+    SIGN_TIME_CATEGORY(ms_sign_quat,
                     ret = sample_response(&resp_quat_2dpush,
                                           &lattice_hom_chall_to_com,
                                           &lattice_content, verbose, timings));
     if (!ret) {
+      if (timings)
+        timings->ms_response +=
+            (float)(clock() - t_step) * 1000.f / CLOCKS_PER_SEC;
       continue;
     }
 #ifndef NDEBUG
     assert(is_good_2dpush(&resp_quat_2dpush, &lattice_content));
 #endif
 
-    SIGN_TIME_FIELD(ms_response_quat_mul,
+    SIGN_TIME_CATEGORY(ms_sign_quat,
                     quat_alg_mul(&resp_quat_2dpush, &resp_quat_2dpush,
                                  &elem_tmp, &QUATALG_PINFTY));
     // bring it to intersection of lat_commit and lideal_chall3_secret3
-    ibz_mul(&lattice_content, &(lideal_chall3_secret3.norm),
-            &(lideal_commit_three.norm));
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
+      ibz_mul(&lattice_content, &(lideal_chall3_secret3.norm),
+              &(lideal_commit_three.norm));
 
-    quat_alg_normalize(&resp_quat_2dpush);
+      quat_alg_normalize(&resp_quat_2dpush);
+    });
 
 #ifndef NDEBUG
     assert(is_good_2dpush(&resp_quat_2dpush, &lattice_content));
@@ -1993,25 +2283,30 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
 
     ibz_t c;
     ibz_init(&c);
-    ibz_mul(&c, &pow3, &pow3);
-    ibz_mul(&c, &c, &pow3);
-    int inv_res = ibz_invmod(&c, &c, &pow2); // c = 3^(-3*e2) mod 2^e1
-    assert(inv_res);
+    int inv_res;
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
+      ibz_mul(&c, &pow3, &pow3);
+      ibz_mul(&c, &c, &pow3);
+      inv_res = ibz_invmod(&c, &c, &pow2); // c = 3^(-3*e2) mod 2^e1
+      assert(inv_res);
 
-    quat_alg_conj(&resp_quat_2dpush_conj, &resp_quat_2dpush);
+      quat_alg_conj(&resp_quat_2dpush_conj, &resp_quat_2dpush);
+    });
     // quat_alg_normalize(&resp_quat_2dpush_conj);
 
-    SIGN_TIME_FIELD(ms_response_matrix,
+    SIGN_TIME_CATEGORY(ms_sign_quat,
                     matrix_of_endomorphism_even(&mat_alpha0,
                                                 &resp_quat_2dpush_conj));
 
-    for (int i = 0; i < 2; i++) {
-      for (int j = 0; j < 2; j++) {
-        ibz_mul(&mat_alpha0[i][j], &mat_alpha0[i][j], &c);
-        ibz_mod(&mat_alpha0[i][j], &mat_alpha0[i][j], &pow2);
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
+      for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+          ibz_mul(&mat_alpha0[i][j], &mat_alpha0[i][j], &c);
+          ibz_mod(&mat_alpha0[i][j], &mat_alpha0[i][j], &pow2);
+        }
       }
-    }
-    ibz_finalize(&c);
+      ibz_finalize(&c);
+    });
 
     ec_basis_t PQ_rsp; // phi_rsp
     copy_point(&PQ_rsp.P, &Bchl.P);
@@ -2023,24 +2318,22 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
       if (timings) {
         float _dt =
             (float)(clock() - _t_isog) * 1000.f / (float)CLOCKS_PER_SEC;
-        timings->ms_response_matrix_apply += _dt;
-        timings->ms_response_isog += _dt;
+        timings->ms_sign_ec_non_isog += _dt;
       }
     }
 
     ec_basis_t Bchl_can2;
-    SIGN_TIME_FIELD(ms_response_basis_hint,
+    SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                     sig->hint_chall = ec_curve_to_basis_2f_to_hint(
                         &Bchl_can2, &E_chl, TORSION_PLUS_EVEN_POWER));
     // ec_curve_to_basis_2(&Bchl_can2, &E_chl);
 
     ibz_mat_2x2_t mat_chl;
     ibz_mat_2x2_init(&mat_chl);
-    SIGN_TIME_FIELD(ms_response_change_basis,
+    SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                     change_of_basis_matrix_two(&mat_chl, &PQ_rsp, &Bchl_can2,
                                                &E_chl));
 
-    clock_t t_step_aux = clock();
     ibq_t norm_q;
     ibz_t d_rsp, remain;
     ibq_init(&norm_q);
@@ -2055,7 +2348,7 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
     ibz_init(&d_aux_coprime6);
     unsigned long n1, n2;
 
-    SIGN_TIME_FIELD(ms_aux_norm, {
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
       quat_alg_norm(&norm_q, &resp_quat_2dpush, &QUATALG_PINFTY);
       ibq_to_ibz(&d_rsp, &norm_q);
 
@@ -2066,7 +2359,7 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
       n1 = mpz_scan1(d_rsp, 0);
       ibz_div_2exp(&d_rsp_odd, &d_rsp, (uint64_t)n1);
 
-      sig->n1 = (uint8_t)n1;
+      sig->n1 = (uint16_t)n1;
 
       // d_aux = 2^(e1 - n1) - d_rsp_odd
       ibz_set(&d_aux, 1);
@@ -2092,12 +2385,30 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
     ec_curve_t E_aux;
     ec_basis_t image_pushrandisog;
 
-    SIGN_TIME_FIELD(ms_pushrandisog,
-                    ret = pushrandisog(&E_aux, &image_pushrandisog,
+    // The callee records its own category timings.
+    ret = pushrandisog(&E_aux, &image_pushrandisog,
                                        &d_aux_coprime6, &kernel_isocom_three1,
                                        &kernel_isocom_three2, &E_com_mid,
                                        &Bcom0_mid, (int)n1, &pow2, &pow3,
-                                       timings));
+                                       timings);
+
+    if (!ret) {
+      // pushrandisog() may fail after allocating all response-local
+      // objects above (for example when the theta chain fails).  Do not use
+      // its output objects, and do not let the next retry reuse finalized
+      // GMP objects.
+      if (timings)
+        timings->ms_response +=
+            (float)(clock() - t_step) * 1000.f / CLOCKS_PER_SEC;
+      ibz_mat_2x2_finalize(&mat_chl);
+      ibq_finalize(&norm_q);
+      ibz_finalize(&d_rsp);
+      ibz_finalize(&remain);
+      ibz_finalize(&d_rsp_odd);
+      ibz_finalize(&d_aux);
+      ibz_finalize(&d_aux_coprime6);
+      continue;
+    }
 
     ec_basis_t RS_aux;
     copy_point(&RS_aux.P, &image_pushrandisog.P);
@@ -2123,10 +2434,12 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
 #endif
 
       isog_init_3(&iso3, &E_aux, &ker_iso3);
-      ec_eval_three(&E_aux, &iso3, push_pts, 3);
-      if (timings) {
-        timings->total_isog_length_three_response += 1;
-      }
+      if (timings)
+        timings->ms_sign_ec_non_isog +=
+            (float)(clock() - t_aux_odd_adjust) * 1000.f / CLOCKS_PER_SEC;
+      SIGN_TIME_CATEGORY(ms_sign_isog,
+                         ec_eval_three(&E_aux, &iso3, push_pts, 3));
+      t_aux_odd_adjust = timings ? clock() : 0;
 
       copy_point(&RS_aux.P, &push_pts[0]);
       copy_point(&RS_aux.Q, &push_pts[1]);
@@ -2159,27 +2472,22 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
       }
     }
     if (timings) {
-      timings->ms_aux_odd_adjust +=
+      timings->ms_sign_ec_non_isog +=
           (float)(clock() - t_aux_odd_adjust) * 1000.f /
           (float)CLOCKS_PER_SEC;
-    }
-
-    if (timings) {
-      timings->ms_aux +=
-          (float)(clock() - t_step_aux) * 1000.f / (float)CLOCKS_PER_SEC;
     }
 
     copy_curve(&sig->E_aux, &E_aux);
 
     ec_basis_t Baux_can;
-    SIGN_TIME_FIELD(ms_aux_basis_hint,
+    SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                     sig->hint_aux = ec_curve_to_basis_2f_to_hint(
                         &Baux_can, &E_aux, TORSION_PLUS_EVEN_POWER));
 
     ibz_mat_2x2_t mat_aux;
     ibz_mat_2x2_init(&mat_aux);
 
-    SIGN_TIME_FIELD(ms_aux_change_basis,
+    SIGN_TIME_CATEGORY(ms_sign_ec_non_isog,
                     change_of_basis_matrix_two(&mat_aux, &RS_aux, &Baux_can,
                                                &E_aux));
 
@@ -2188,54 +2496,58 @@ int protocols_sign(signature_t *sig, const public_key_t *pk,
 
     ibz_mat_2x2_t mat_rsp;
     ibz_mat_2x2_init(&mat_rsp);
-    SIGN_TIME_FIELD(ms_aux_matrix_finalize, {
+    SIGN_TIME_CATEGORY(ms_sign_quat, {
       ibz_2x2_inv_mod(&mat_aux_inv, &mat_aux, &pow2);
       ibz_2x2_mul_mod(&mat_rsp, &mat_chl, &mat_aux_inv, &pow2);
       ibz_mat_2x2_copy(&sig->mat_rsp, &mat_rsp);
     });
 
-    if (timings) {
+    if (timings)
       timings->ms_response +=
           (float)(clock() - t_step) * 1000.f / (float)CLOCKS_PER_SEC;
-    }
 
-    ibz_vec_2_finalize(&vec);
-    ibz_vec_2_finalize(&vec_can);
-    ibz_mat_2x2_finalize(&mat_alpha0);
-    ibz_mat_2x2_finalize(&mat_Bcom0_to_Bcom);
-    ibz_mat_2x2_finalize(&mat_sigma_phichall_BA_to_Bcomcan);
-    ibz_mat_2x2_finalize(&mat_sigma_phichall_BA0_to_Bcom0);
     ibz_mat_2x2_finalize(&mat_chl);
     ibz_mat_2x2_finalize(&mat_aux);
     ibz_mat_2x2_finalize(&mat_aux_inv);
     ibz_mat_2x2_finalize(&mat_rsp);
-    ibz_mat_2x2_finalize(&mat_BAcan_to_BA0_two);
-    ibz_mat_2x2_finalize(&mat_BAcan_to_BA0_three);
-
-    quat_alg_elem_finalize(&resp_quat);
-    quat_alg_elem_finalize(&elem_tmp);
-    quat_alg_elem_finalize(&resp_quat_2dpush);
-    quat_alg_elem_finalize(&resp_quat_2dpush_conj);
-    quat_lattice_finalize(&lattice_hom_chall_to_com);
-    quat_lattice_finalize(&lat_commit);
-    quat_left_ideal_finalize(&lideal_commit_three);
-    quat_left_ideal_finalize(&lideal_chall_three);
-    quat_left_ideal_finalize(&lideal_chall3_secret2);
-    quat_left_ideal_finalize(&lideal_chall3_secret3);
-    quat_left_ideal_finalize(&lideal_tmp);
-
-    ibz_finalize(&degree_com_isogeny);
-    ibz_finalize(&tmp);
-    ibz_finalize(&lattice_content);
     ibq_finalize(&norm_q);
     ibz_finalize(&d_rsp);
     ibz_finalize(&remain);
     ibz_finalize(&d_rsp_odd);
     ibz_finalize(&d_aux);
     ibz_finalize(&d_aux_coprime6);
-    ibz_finalize(&pow2);
-    ibz_finalize(&pow3);
   }
 
-  return 0;
+  // Objects shared by all retry attempts are finalized only once, after the
+  // retry loop.  This is important when a response attempt fails and the
+  // loop is entered again.
+  ibz_vec_2_finalize(&vec);
+  ibz_vec_2_finalize(&vec_can);
+  ibz_mat_2x2_finalize(&mat_alpha0);
+  ibz_mat_2x2_finalize(&mat_Bcom0_to_Bcom);
+  ibz_mat_2x2_finalize(&mat_sigma_phichall_BA_to_Bcomcan);
+  ibz_mat_2x2_finalize(&mat_sigma_phichall_BA0_to_Bcom0);
+  ibz_mat_2x2_finalize(&mat_BAcan_to_BA0_two);
+  ibz_mat_2x2_finalize(&mat_BAcan_to_BA0_three);
+
+  quat_alg_elem_finalize(&resp_quat);
+  quat_alg_elem_finalize(&elem_tmp);
+  quat_alg_elem_finalize(&resp_quat_2dpush);
+  quat_alg_elem_finalize(&resp_quat_2dpush_conj);
+  quat_lattice_finalize(&lattice_hom_chall_to_com);
+  quat_lattice_finalize(&lat_commit);
+  quat_left_ideal_finalize(&lideal_commit_three);
+  quat_left_ideal_finalize(&lideal_chall_three);
+  quat_left_ideal_finalize(&lideal_chall3_secret2);
+  quat_left_ideal_finalize(&lideal_chall3_secret3);
+  quat_left_ideal_finalize(&lideal_tmp);
+
+  ibz_finalize(&degree_com_isogeny);
+  ibz_finalize(&tmp);
+  ibz_finalize(&lattice_content);
+  ibz_finalize(&pow2);
+  ibz_finalize(&pow3);
+
+  // protocols_sign() uses 0 for success for compatibility with its callers.
+  return ret ? 0 : 1;
 }

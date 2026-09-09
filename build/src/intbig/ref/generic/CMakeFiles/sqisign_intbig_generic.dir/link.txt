@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-11" cr libsqisign_intbig_generic.a CMakeFiles/sqisign_intbig_generic.dir/intbig.c.o
-"/usr/bin/gcc-ranlib-11" libsqisign_intbig_generic.a

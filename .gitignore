@@ -1,0 +1,8 @@
+# Generated Python files can embed absolute source paths.
+__pycache__/
+*.py[cod]
+
+# Local CMake build output can contain machine-specific paths.
+/build/
+/build-*/
+/cmake-build-*/

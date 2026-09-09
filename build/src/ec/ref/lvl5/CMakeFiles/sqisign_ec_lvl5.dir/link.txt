@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-11" cr libsqisign_ec_lvl5.a CMakeFiles/sqisign_ec_lvl5.dir/__/ecx/poly-mul.c.o CMakeFiles/sqisign_ec_lvl5.dir/__/ecx/poly-redc.c.o CMakeFiles/sqisign_ec_lvl5.dir/__/ecx/ec.c.o CMakeFiles/sqisign_ec_lvl5.dir/__/ecx/tedwards.c.o CMakeFiles/sqisign_ec_lvl5.dir/__/ecx/kps.c.o CMakeFiles/sqisign_ec_lvl5.dir/__/ecx/xisog.c.o CMakeFiles/sqisign_ec_lvl5.dir/__/ecx/xeval.c.o CMakeFiles/sqisign_ec_lvl5.dir/__/ecx/isog_chains.c.o CMakeFiles/sqisign_ec_lvl5.dir/__/ecx/basis.c.o
-"/usr/bin/gcc-ranlib-11" libsqisign_ec_lvl5.a

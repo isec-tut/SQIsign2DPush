@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-11" cr libsqisign_klpt_lvl3.a CMakeFiles/sqisign_klpt_lvl3.dir/__/klptx/eichler.c.o CMakeFiles/sqisign_klpt_lvl3.dir/__/klptx/equiv.c.o CMakeFiles/sqisign_klpt_lvl3.dir/__/klptx/klpt.c.o CMakeFiles/sqisign_klpt_lvl3.dir/__/klptx/tools.c.o
-"/usr/bin/gcc-ranlib-11" libsqisign_klpt_lvl3.a

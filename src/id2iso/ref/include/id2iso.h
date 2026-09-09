@@ -210,4 +210,15 @@ void matrix_application_three_basis(ec_basis_t *bas, const ec_curve_t *E,
 
 void from_1ijk_to_O0basis(ibz_vec_4_t *vec, const quat_alg_elem_t *el);
 
+/* Optional, disjoint CPU-time accumulators in milliseconds. The original
+ * entry points remain uninstrumented wrappers around these implementations. */
+void id2iso_ideal_to_isogeny_even_dlogs_timed(
+    ec_isog_even_t *isog, ibz_vec_2_t *ker_dlog,
+    const quat_left_ideal_t *lideal_input, float *quat_ms, float *ec_ms);
+
+void id2iso_ideal_to_isogeny_odd_plus_timed(
+    ec_isog_odd_t *isog, ibz_vec_2_t *ker_dlog, const ec_curve_t *domain,
+    const ec_basis_t *basis_plus, const quat_left_ideal_t *lideal_input,
+    float *quat_ms, float *ec_ms);
+
 #endif

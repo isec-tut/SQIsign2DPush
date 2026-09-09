@@ -5,27 +5,49 @@ It uses the base code of [SQIsign-v2.0](https://github.com/SQIsign/the-sqisign/t
 
 ## Requirements
 
-- CMake (version 3.5 or later)
+- CMake (version 3.13 or later)
 - C99-compatible C compiler and an assembler
 - GMP development files, unless building GMP with `-DENABLE_GMP_BUILD=ON`
 - Make, or another build tool supported by the selected CMake generator
 
+## Implementation selection
+
+The finite-field implementation is selected at CMake configure time with
+`SQISIGN_BUILD_TYPE`:
+
+- `ref`: Fiat-Crypto-based reference backend (`fp_hd256.c`, `fp_hd384.c`, and
+  `fp_hd512.c`).
+- `optimized`: the optimized backend in `src/gf/optimized`, using the
+  generated `fp_backend.c` files.
+
+The two backends expose the same field API and the same canonical byte
+encoding. Montgomery limbs and backend-specific internal layouts are never
+written directly to the public key, secret key, or signature encoding.
+Use separate build directories when switching between backends because the
+choice is stored in the CMake cache.
+
 ## Build and test
 
 ```sh
-rm -rf build
-cmake -S . -B build -DSQISIGN_BUILD_TYPE=ref -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j"$(nproc)"
+cmake -S . -B build-ref -DSQISIGN_BUILD_TYPE=ref -DCMAKE_BUILD_TYPE=Release
+cmake --build build-ref -j"$(nproc)"
 ```
 
-This builds the reference implementation in Release mode. If you only want to
-build the SQIsign2DPush timing tests, choose the security level you want and run
-one of the following commands from the repository root:
+To build the optimized finite-field backend instead:
 
 ```sh
-cmake --build build --target sqisign_test_sqisign2dpush_lvl1
-cmake --build build --target sqisign_test_sqisign2dpush_lvl3
-cmake --build build --target sqisign_test_sqisign2dpush_lvl5
+cmake -S . -B build-optimized -DSQISIGN_BUILD_TYPE=optimized -DCMAKE_BUILD_TYPE=Release
+cmake --build build-optimized -j"$(nproc)"
+```
+
+The SQIsign2DPush implementation and its protocol tests are shared by both
+configurations. To build one level only, run one of the following commands
+with the selected build directory:
+
+```sh
+cmake --build build-ref --target sqisign_test_sqisign2dpush_lvl1
+cmake --build build-ref --target sqisign_test_sqisign2dpush_lvl3
+cmake --build build-ref --target sqisign_test_sqisign2dpush_lvl5
 ```
 
 Here `lvl1`, `lvl3`, and `lvl5` are the three parameter sets. Larger levels are
@@ -34,107 +56,158 @@ slower and correspond to stronger security parameters.
 After building, run the matching test binary:
 
 ```sh
-./build/src/sqisign2dpush/ref/lvl1/test/sqisign_test_sqisign2dpush_lvl1
-./build/src/sqisign2dpush/ref/lvl3/test/sqisign_test_sqisign2dpush_lvl3
-./build/src/sqisign2dpush/ref/lvl5/test/sqisign_test_sqisign2dpush_lvl5
+./build-ref/src/sqisign2dpush/ref/lvl1/test/sqisign_test_sqisign2dpush_lvl1
+./build-ref/src/sqisign2dpush/ref/lvl3/test/sqisign_test_sqisign2dpush_lvl3
+./build-ref/src/sqisign2dpush/ref/lvl5/test/sqisign_test_sqisign2dpush_lvl5
 ```
 
 For example, to measure level 1 only:
 
 ```sh
-cmake --build build --target sqisign_test_sqisign2dpush_lvl1
-./build/src/sqisign2dpush/ref/lvl1/test/sqisign_test_sqisign2dpush_lvl1
+cmake --build build-ref --target sqisign_bench_sqisign2dpush_lvl1
+./build-ref/src/sqisign2dpush/ref/lvl1/test/sqisign_bench_sqisign2dpush_lvl1 100
 ```
+
+The encoding and protocol round-trip tests can be run directly:
+
+```sh
+./build-ref/src/sqisign2dpush/ref/lvl1/test/sqisign_test_encoding_lvl1
+./build-ref/src/sqisign2dpush/ref/lvl1/test/sqisign_test_sqisign2dpush_lvl1
+```
+
+For a configured build tree, CTest can also be used:
+
+```sh
+ctest --test-dir build-ref --output-on-failure
+```
+
+## Integer representation
+
+`represent_integer` follows the signed-coordinate search and small-prime
+two-square solver in [hiroshi-onuki/SQIsign2D-Push](https://github.com/hiroshi-onuki/SQIsign2D-Push).
+It preserves the requested norm and retries nonprimitive candidates within
+a bounded search. See [the implementation notes (Japanese)](docs/represent-integer-onuki-ja.md)
+for the upstream revision, remaining differences, and validation.
+
+## Response sampling
+
+`sample_response` follows the public Julia implementation's
+`element_for_response` search. After LLL reduction it enumerates the
+short-vector candidates of the resulting positive-definite quadratic form,
+reduces the coefficient vector by its gcd, and accepts a nonzero candidate
+whose normalized norm is below `2^EXPONENT_TWO` and coprime to 3. It does not
+use the former random `m=10` candidate box or a fixed inner attempt limit.
+Protocol signing retries the outer response construction in the same way as
+the Julia implementation when a response construction step fails.
 
 ## Finite-field benchmarks
 
-The `Fp` arithmetic in each parameter level's `fp.c` uses the corresponding
-generated file: `fp_hd256.c` for level 1, `fp_hd384.c` for level 3, and
-`fp_hd512.c` for level 5. These files are generated using
-[Fiat-Crypto](https://github.com/mit-plv/fiat-crypto).
+In a `ref` build, the basic `Fp` operations use `fp_hd256.c` for level 1,
+`fp_hd384.c` for level 3, and `fp_hd512.c` for level 5. These files contain
+[Fiat-Crypto](https://github.com/mit-plv/fiat-crypto) generated routines and
+specialized multiplication and squaring routines. An `optimized` build uses
+the generated backend under `src/gf/optimized/lvl{1,3,5}` instead.
+
+Each level's `fp_exp.c` contains pre-generated schedules for the fixed
+exponents `(p-3)/4` and `(p+1)/4`. Inversion in `fp.c` uses the former;
+square roots use the latter. Normal builds use the checked-in C files and
+do not require Python. To regenerate or check them:
+
+```sh
+python3 scripts/gen_fp_fixed.py
+python3 scripts/gen_fp_fixed.py --check
+```
 
 The finite-field test binaries accept either `test <reps>` for correctness
 tests or `bench <reps>` for cycle-count benchmarks. For example, to benchmark
 the level 1 $GF(p)$ and $GF(p^2)$ arithmetic from the repository root:
 
 ```sh
-cmake --build build --target sqisign_test_gf_lvl1_fp
-cmake --build build --target sqisign_test_gf_lvl1_fp2
+cmake --build build-ref --target sqisign_test_gf_lvl1_fp
+cmake --build build-ref --target sqisign_test_gf_lvl1_fp2
 
-./build/src/gf/ref/lvl1/test/sqisign_test_gf_lvl1_fp bench 100000
-./build/src/gf/ref/lvl1/test/sqisign_test_gf_lvl1_fp2 bench 100000
+./build-ref/src/gf/ref/lvl1/test/sqisign_test_gf_lvl1_fp bench 100000
+./build-ref/src/gf/ref/lvl1/test/sqisign_test_gf_lvl1_fp2 bench 100000
 ```
 
 The corresponding level 3 and level 5 binaries are:
 
 ```sh
-./build/src/gf/ref/lvl3/test/sqisign_test_gf_lvl3_fp bench 100000
-./build/src/gf/ref/lvl3/test/sqisign_test_gf_lvl3_fp2 bench 100000
-./build/src/gf/ref/lvl5/test/sqisign_test_gf_lvl5_fp bench 100000
-./build/src/gf/ref/lvl5/test/sqisign_test_gf_lvl5_fp2 bench 100000
+./build-ref/src/gf/ref/lvl3/test/sqisign_test_gf_lvl3_fp bench 100000
+./build-ref/src/gf/ref/lvl3/test/sqisign_test_gf_lvl3_fp2 bench 100000
+./build-ref/src/gf/ref/lvl5/test/sqisign_test_gf_lvl5_fp bench 100000
+./build-ref/src/gf/ref/lvl5/test/sqisign_test_gf_lvl5_fp2 bench 100000
 ```
+
+For an optimized build, replace `build-ref/src/gf/ref` with
+`build-optimized/src/gf/optimized`.
+
+## Encoded formats
+
+The encoded formats are defined by the mathematical object, not by the
+finite-field limb layout. The current sizes are:
+
+| Level | Public key | Secret key | Signature |
+| --- | ---: | ---: | ---: |
+| lvl1 | 66 bytes | 455 bytes | 151 bytes |
+| lvl3 | 98 bytes | 679 bytes | 219 bytes |
+| lvl5 | 130 bytes | 899 bytes | 295 bytes |
+
+`fp_encode` writes a canonical little-endian field element and `fp_decode`
+restores the backend's internal representation. The legacy hash path uses
+`fp_encode_legacy_hash` explicitly so that the protocol hash input remains
+compatible with the established format.
 
 ## SQIsign2DPush timing output
 
-The SQIsign2DPush test repeats key generation, signing, and verification, then
-prints their average running times. For each operation, it also splits the
-average time into four categories:
+The `sqisign_bench_sqisign2dpush_lvl{1,3,5}` binary accepts an optional
+iteration count; the default is 3. It performs all key generations first,
+then all signatures, and finally all verifications. For example:
 
-- `Isogeny computations`: one-dimensional isogeny evaluation and initialization
-  such as `ec_eval_even`, `ec_eval_three`, `isog_init_three`, and
-  `isog_init_two`, plus two-dimensional isogeny chains such as
-  `theta_chain_compute_and_eval` and `theta_chain_compute_and_eval_verify`.
-- `EC/basis except isogeny`: elliptic-curve and basis operations which are not
-  counted as isogeny computation, such as basis generation, basis changes,
-  biscalar multiplication, pairings, dlogs, kernel setup, and matrix
-  application to bases.
-- `Quaternion algorithms`: quaternion and ideal/lattice algorithms, including
-  `quat_*`, `represent_integer`, and `sample_response`. Conversion routines
-  between quaternion ideals and elliptic-curve data are split according to
-  their internal quaternion, elliptic-curve, and other work when separately
-  measured.
-- `Other`: remaining measured time not assigned to the above categories, such
-  as hashing, setup, final checks, and bookkeeping.
+```sh
+cmake --build build-ref --target sqisign_bench_sqisign2dpush_lvl1
+./build-ref/src/sqisign2dpush/ref/lvl1/test/sqisign_bench_sqisign2dpush_lvl1 100
+```
 
-The percentage is computed with the average operation time as the denominator.
-For example, if average signing takes `53.62923 ms`, then
-`Quaternion algorithms: 27.23998 ms (50.79%)` means that about half of the
-signing time was spent in quaternion-related code.
+On x86/x86-64, cycle counts use `rdtsc`; other platforms use the `clock`
+fallback. The benchmark reports average, standard deviation, median, minimum,
+and maximum in MCycles, followed by average CPU time in milliseconds.
 
-Example output:
+Each phase also reports four disjoint CPU-time categories:
+
+- `isogeny`: one- and two-dimensional isogeny computation, including
+  `ec_eval_*`, `isog_init_*`, and theta-isogeny chains.
+- `elliptic-curve`: elliptic-curve and basis work outside the isogeny category,
+  such as basis changes, scalar multiplication, pairings, dlogs, kernel setup,
+  and matrix application.
+- `ideal/quaternion`: quaternion, ideal, lattice, `represent_integer`, and
+  `sample_response` processing.
+- `other`: the residual CPU time, including hashing, setup, final checks, and
+  bookkeeping.
+
+The category percentages use the average CPU time of the corresponding phase
+as the denominator. The `other` value is calculated as the total phase time
+minus the first three categories, so small rounding residuals are expected.
+The exact values depend on the CPU, compiler, build type, parameter level, and
+iteration count. A representative level-1 output is:
 
 ```text
-Average keygen time [14.20469 ms]
-Avg keygen:      35.45607 Mcycles
-Median keygen:   33.23159 Mcycles
-Min keygen:      24.34429 Mcycles
-Max keygen:      73.93395 Mcycles
-  Keygen category ratios (denominator: avg keygen)
-    Isogeny computations:         3.48792 ms ( 24.55%)
-    EC/basis except isogeny:      4.98671 ms ( 35.11%)
-    Quaternion algorithms:        5.58854 ms ( 39.34%)
-    Other:                        0.14152 ms (  1.00%)
-average signing time [28.90103 ms]
-Avg signing:     72.13934 Mcycles
-Median signing:  70.71151 Mcycles
-Min signing:     58.24607 Mcycles
-Max signing:     103.74216 Mcycles
-  Signing category ratios (denominator: avg signing)
-    Isogeny computations:         10.46034 ms ( 36.19%)
-    EC/basis except isogeny:      9.32175 ms ( 32.25%)
-    Quaternion algorithms:        8.69469 ms ( 30.08%)
-    Other:                        0.42425 ms (  1.47%)
-average verification time [4.73436 ms]
-Avg verify:      11.81735 Mcycles
-Median verify:   11.79898 Mcycles
-Min verify:      11.65920 Mcycles
-Max verify:      12.18837 Mcycles
-  Verify category ratios (denominator: avg verify)
-    Isogeny computations:         3.03324 ms ( 64.07%)
-    EC/basis except isogeny:      1.63858 ms ( 34.61%)
-    Quaternion algorithms:        0.00000 ms (  0.00%)
-    Other:                        0.06254 ms (  1.32%)
-All tests passed!
+keygen completed
+sign completed
+verify completed
+
+SQIsign2DPush benchmark (1 iterations)
+CPU cycles: rdtsc
+  keygen  average 51.982, stddev 0.000, median 51.982, min 51.982, max 51.982 MCycles
+  sign    average 462.545, stddev 0.000, median 462.545, min 462.545, max 462.545 MCycles
+  verify  average 22.469, stddev 0.000, median 22.469, min 22.469, max 22.469 MCycles
+  average time: keygen 10.412 ms, sign 102.775 ms, verify 4.993 ms
+
+  breakdown averages [CPU ms (total percentage)]
+  other = unclassified time, hashing, management and measurement overhead
+  keygen  isogeny 3.600 ms (34.6%), elliptic-curve 5.562 ms (53.4%), ideal/quaternion 1.213 ms (11.7%), other 0.037 ms (0.4%)
+  sign    isogeny 35.253 ms (34.3%), elliptic-curve 30.481 ms (29.7%), ideal/quaternion 36.482 ms (35.5%), other 0.559 ms (0.5%)
+  verify  isogeny 3.157 ms (63.2%), elliptic-curve 1.764 ms (35.3%), ideal/quaternion 0.000 ms (0.0%), other 0.072 ms (1.4%)
 ```
 
 ## Build options
@@ -163,7 +236,13 @@ cmake --build build --target doc
 ### SQISIGN_BUILD_TYPE
 
 Specifies the build type for which SQIsign is built. The currently supported flags are:
-- `ref`, which builds the plain C reference implementation.
+- `ref`, which builds the Fiat-Crypto-based finite-field reference backend.
+- `optimized`, which builds the optimized finite-field backend in
+  `src/gf/optimized`.
+
+The alias `opt` is accepted by CMake and normalized to `optimized`. The
+`broadwell` and `arm64crypto` values remain available for the platform-specific
+backends supported by the base project.
 
 ### CMAKE_BUILD_TYPE
 
@@ -188,3 +267,5 @@ Third party code is used in some test and common code files of this directory (`
 - `src/common/generic/aes_c.c`; MIT: "Copyright (c) 2016 Thomas Pornin <pornin@bolet.org>"
 - `src/common/generic/fips202.c`: Public Domain
 - `src/common/generic/randombytes_system.c`: MIT: Copyright (c) 2017 Daan Sprenkels <hello@dsprenkels.com>
+
+Fp reference backend: see [the v2-style representation, limb widths and benchmark results (Japanese)](docs/fp-v2-backend-ja.md).

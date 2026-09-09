@@ -177,6 +177,18 @@ void quat_alg_norm(ibq_t *res, const quat_alg_elem_t *a,
   quat_alg_elem_finalize(&norm);
 }
 
+void quat_alg_norm_num_denom(ibz_t *res_num, ibz_t *res_denom,
+                             const quat_alg_elem_t *a,
+                             const quat_alg_t *alg) {
+  ibq_t norm;
+
+  ibq_init(&norm);
+  quat_alg_norm(&norm, a, alg);
+  ibq_num(res_num, &norm);
+  ibq_denom(res_denom, &norm);
+  ibq_finalize(&norm);
+}
+
 void quat_alg_trace(ibq_t *res, const quat_alg_elem_t *a) {
   quat_alg_elem_t trace;
   quat_alg_elem_init(&trace);

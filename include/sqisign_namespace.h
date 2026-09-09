@@ -27,6 +27,8 @@
 #if defined(SQISIGN_VARIANT) && !defined(DISABLE_NAMESPACING)
 #if defined(SQISIGN_BUILD_TYPE_REF)
 #define SQISIGN_NAMESPACE(s) PARAM_NAME3(ref, s)
+#elif defined(SQISIGN_BUILD_TYPE_OPTIMIZED)
+#define SQISIGN_NAMESPACE(s) PARAM_NAME3(optimized, s)
 #elif defined(SQISIGN_BUILD_TYPE_OPT)
 #define SQISIGN_NAMESPACE(s) PARAM_NAME3(opt, s)
 #elif defined(SQISIGN_BUILD_TYPE_BROADWELL)
@@ -476,6 +478,7 @@
 #undef fp_is_zero
 #undef fp_mul_small
 #undef fp_neg
+#undef fp_encode_legacy_hash
 #undef fp_set_one
 #undef fp_set_small
 #undef fp_set_zero
@@ -491,6 +494,7 @@
 #define fp_is_zero SQISIGN_NAMESPACE(fp_is_zero)
 #define fp_mul_small SQISIGN_NAMESPACE(fp_mul_small)
 #define fp_neg SQISIGN_NAMESPACE(fp_neg)
+#define fp_encode_legacy_hash SQISIGN_NAMESPACE(fp_encode_legacy_hash)
 #define fp_set_one SQISIGN_NAMESPACE(fp_set_one)
 #define fp_set_small SQISIGN_NAMESPACE(fp_set_small)
 #define fp_set_zero SQISIGN_NAMESPACE(fp_set_zero)
@@ -793,9 +797,11 @@
 #define ibz_two_adic SQISIGN_NAMESPACE_GENERIC(ibz_two_adic)
 
 // Namespacing symbols exported from integers.c:
+#undef ibz_sum_of_two_squares
 #undef ibz_cornacchia_prime
 #undef ibz_generate_random_prime
 
+#define ibz_sum_of_two_squares SQISIGN_NAMESPACE_GENERIC(ibz_sum_of_two_squares)
 #define ibz_cornacchia_prime SQISIGN_NAMESPACE_GENERIC(ibz_cornacchia_prime)
 #define ibz_generate_random_prime                                              \
   SQISIGN_NAMESPACE_GENERIC(ibz_generate_random_prime)
@@ -1206,5 +1212,10 @@
 
 #define NQR_TABLE SQISIGN_NAMESPACE(NQR_TABLE)
 #define Z_NQR_TABLE SQISIGN_NAMESPACE(Z_NQR_TABLE)
+
+#define id2iso_ideal_to_isogeny_even_dlogs_timed \
+  SQISIGN_NAMESPACE(id2iso_ideal_to_isogeny_even_dlogs_timed)
+#define id2iso_ideal_to_isogeny_odd_plus_timed \
+  SQISIGN_NAMESPACE(id2iso_ideal_to_isogeny_odd_plus_timed)
 
 #endif

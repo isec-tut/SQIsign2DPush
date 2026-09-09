@@ -1,3 +1,4 @@
+#include <encoded_sizes.h>
 #include "test_extras.h"
 #include <stdio.h>
 #include <string.h>
@@ -17,7 +18,7 @@ static int TEST_LOOPS  = 100000;       // Number of iterations per test
  * Montgomery residues. */
 static bool fp_decode_case(const fp_t value, bool valid)
 {
-    uint8_t bytes[sizeof(fp_t)], encoded[sizeof(fp_t)];
+    uint8_t bytes[FP_ENCODED_BYTES], encoded[FP_ENCODED_BYTES];
     fp_t decoded, expected;
 
     for (size_t i = 0; i < sizeof(bytes); i++)
@@ -106,24 +107,24 @@ bool fp_test()
     passed = 1;
     for (n=0; n<TEST_LOOPS; n++)
     {
-        fprandom_test(a); fprandom_test(b); fprandom_test(c); fprandom_test(d); 
+        fprandom_test(a); fp_tomont(a, a); fprandom_test(b); fp_tomont(b, b); fprandom_test(c); fp_tomont(c, c); fprandom_test(d); fp_tomont(d, d);
 
         fp_add(d, a, b); fp_add(e, d, c);                 // e = (a+b)+c
         fp_add(d, b, c); fp_add(f, d, a);                 // f = a+(b+c)
-        if (compare_words(e, f, NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp_is_equal(e, f)) { passed=0; break; }
 
         fp_add(d, a, b);                                  // d = a+b 
         fp_add(e, b, a);                                  // e = b+a
-        if (compare_words(d, e, NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp_is_equal(d, e)) { passed=0; break; }
 
         fp_set(b, 0);
         fp_add(d, a, b);                                  // d = a+0 
-        if (compare_words(a, d, NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp_is_equal(a, d)) { passed=0; break; }
 
         fp_set(b, 0);   
         fp_neg(d, a);                      
         fp_add(e, a, d);                                  // e = a+(-a)
-        if (compare_words(e, b, NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp_is_equal(e, b)) { passed=0; break; }
     }
     if (passed==1) printf("  GF(p) addition tests ............................................ PASSED");
     else { printf("  GF(p) addition tests... FAILED"); printf("\n"); return false; }
@@ -133,24 +134,24 @@ bool fp_test()
     passed = 1;
     for (n=0; n<TEST_LOOPS; n++)
     {
-        fprandom_test(a); fprandom_test(b); fprandom_test(c); fprandom_test(d);
+        fprandom_test(a); fp_tomont(a, a); fprandom_test(b); fp_tomont(b, b); fprandom_test(c); fp_tomont(c, c); fprandom_test(d); fp_tomont(d, d);
 
         fp_sub(d, a, b); fp_sub(e, d, c);                 // e = (a-b)-c
         fp_add(d, b, c); fp_sub(f, a, d);                 // f = a-(b+c)
-        if (compare_words(e, f, NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp_is_equal(e, f)) { passed=0; break; }
 
         fp_sub(d, a, b);                                  // d = a-b 
         fp_sub(e, b, a);
         fp_neg(e, e);                                     // e = -(b-a)
-        if (compare_words(d, e, NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp_is_equal(d, e)) { passed=0; break; }
 
         fp_set(b, 0);
         fp_sub(d, a, b);                                  // d = a-0 
-        if (compare_words(a, d, NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp_is_equal(a, d)) { passed=0; break; }
         
         fp_set(b, 0);              
         fp_sub(e, a, a);                                  // e = a+(-a)
-        if (compare_words(e, b, NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp_is_equal(e, b)) { passed=0; break; }
     }
     if (passed==1) printf("  GF(p) subtraction tests ......................................... PASSED");
     else { printf("  GF(p) subtraction tests... FAILED"); printf("\n"); return false; }
@@ -219,7 +220,7 @@ bool fp_test()
 
         fp_set(a, 0); fp_tomont(ma, a);
         fp_sqr(md, ma);                                   // d = 0^2 
-        if (compare_words(ma, md, NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp_is_equal(ma, md)) { passed=0; break; }
     }
     if (passed==1) printf("  GF(p) squaring tests............................................. PASSED");
     else { printf("  GF(p) squaring tests... FAILED"); printf("\n"); return false; }
@@ -242,7 +243,7 @@ bool fp_test()
         fp_set(a, 0);
         fp_set(d, 0);
         fp_inv(a);                                        // c = 0^-1
-        if (compare_words(a, d, NWORDS_FIELD) != 0) { passed = 0; break; }
+        if (!fp_is_equal(a, d)) { passed = 0; break; }
     }
     if (passed == 1) printf("  GF(p) inversion tests............................................ PASSED");
     else { printf("  GF(p) inversion tests... FAILED"); printf("\n"); return false; }
@@ -277,12 +278,13 @@ bool fp_run()
     bool OK = true;
     int n;
     unsigned long long cycles, cycles1, cycles2;
+    volatile unsigned int square_result = 0;
     fp_t a, b, c;
         
     printf("\n--------------------------------------------------------------------------------------------------------\n\n"); 
     printf("Benchmarking field arithmetic: \n\n"); 
         
-    fprandom_test(a); fprandom_test(b); fprandom_test(c);
+    fprandom_test(a); fp_tomont(a, a); fprandom_test(b); fp_tomont(b, b); fprandom_test(c); fp_tomont(c, c);
 
     // GF(p) addition
     cycles = 0;
@@ -349,7 +351,7 @@ bool fp_run()
     for (n = 0; n < BENCH_LOOPS; n++)
     {
         cycles1 = cpucycles();
-        fp_is_square(a);
+        square_result ^= (unsigned int)fp_is_square(a);
         cycles2 = cpucycles();
         cycles = cycles + (cycles2 - cycles1);
     }

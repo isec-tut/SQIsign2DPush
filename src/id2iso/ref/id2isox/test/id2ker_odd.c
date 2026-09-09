@@ -11,7 +11,7 @@ static void random_scalar(ibz_t *k)
 
 
 // defined in src/klpt/ref/generic/tools.c
-int represent_integer(quat_alg_elem_t *gamma, ibz_t *n_gamma, const quat_alg_t *Bpoo);
+int represent_integer(quat_alg_elem_t *gamma, const ibz_t *n_gamma, const quat_alg_t *Bpoo);
 
 // both ideals will have norm dividing T
 static void random_pair_of_equivalent_ideals(quat_left_ideal_t *I, quat_left_ideal_t *J)

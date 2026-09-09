@@ -17,7 +17,7 @@
 
 /** @brief Test for the tools of the KLPT module, covers the following functions :
  * 
- * int represent_integer(quat_alg_elem_t *gamma, ibz_t *n_gamma, const quat_alg_t *Bpoo);
+ * int represent_integer(quat_alg_elem_t *gamma, const ibz_t *n_gamma, const quat_alg_t *Bpoo);
  * int solve_combi_eichler(ibz_vec_2_t *C, const quat_p_extremal_maximal_order_t *order, const quat_alg_elem_t *gamma, const quat_alg_elem_t *delta, const quat_left_ideal_t *lideal, const quat_alg_t *Bpoo, int is_divisible);
  * int klpt_find_linear_comb(ibz_vec_2_t *C,const quat_alg_elem_t *beta, const quat_order_t *order, const ibz_t *n, const unsigned short exp, const quat_alg_elem_t *gen_start, const quat_alg_elem_t *gen_end,const quat_alg_t *Bpoo);
  * 

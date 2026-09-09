@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-11" cr libsqisign_sqisign2dpush_lvl1.a CMakeFiles/sqisign_sqisign2dpush_lvl1.dir/__/lvlx/doublepath.c.o CMakeFiles/sqisign_sqisign2dpush_lvl1.dir/__/lvlx/sign.c.o CMakeFiles/sqisign_sqisign2dpush_lvl1.dir/__/lvlx/keygen.c.o CMakeFiles/sqisign_sqisign2dpush_lvl1.dir/__/lvlx/toolbox.c.o CMakeFiles/sqisign_sqisign2dpush_lvl1.dir/__/lvlx/verify.c.o
-"/usr/bin/gcc-ranlib-11" libsqisign_sqisign2dpush_lvl1.a

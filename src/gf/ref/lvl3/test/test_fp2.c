@@ -24,24 +24,24 @@ bool fp2_test()
     passed = 1;
     for (n=0; n<TEST_LOOPS; n++)
     {
-        fp2random_test(&a); fp2random_test(&b); fp2random_test(&c); fp2random_test(&d); 
+        fp2random_test(&a); fp2_tomont(&a, &a); fp2random_test(&b); fp2_tomont(&b, &b); fp2random_test(&c); fp2_tomont(&c, &c); fp2random_test(&d); fp2_tomont(&d, &d);
 
         fp2_add(&d, &a, &b); fp2_add(&e, &d, &c);                 // e = (a+b)+c
         fp2_add(&d, &b, &c); fp2_add(&f, &d, &a);                 // f = a+(b+c)
-        if (compare_words((digit_t*)&e, (digit_t*)&f, 2*NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp2_is_equal(&e, &f)) { passed=0; break; }
 
         fp2_add(&d, &a, &b);                                      // d = a+b 
         fp2_add(&e, &b, &a);                                      // e = b+a
-        if (compare_words((digit_t*)&d, (digit_t*)&e, 2*NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp2_is_equal(&d, &e)) { passed=0; break; }
 
         fp2_set(&b, 0);
         fp2_add(&d, &a, &b);                                      // d = a+0 
-        if (compare_words((digit_t*)&a, (digit_t*)&d, 2*NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp2_is_equal(&a, &d)) { passed=0; break; }
 
         fp2_set(&b, 0);   
         fp2_neg(&d, &a);                      
         fp2_add(&e, &a, &d);                                      // e = a+(-a)
-        if (compare_words((digit_t*)&e, (digit_t*)&b, 2*NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp2_is_equal(&e, &b)) { passed=0; break; }
     }
     if (passed==1) printf("  GF(p^2) addition tests ............................................ PASSED");
     else { printf("  GF(p^2) addition tests... FAILED"); printf("\n"); return false; }
@@ -51,24 +51,24 @@ bool fp2_test()
     passed = 1;
     for (n=0; n<TEST_LOOPS; n++)
     {
-        fp2random_test(&a); fp2random_test(&b); fp2random_test(&c); fp2random_test(&d);
+        fp2random_test(&a); fp2_tomont(&a, &a); fp2random_test(&b); fp2_tomont(&b, &b); fp2random_test(&c); fp2_tomont(&c, &c); fp2random_test(&d); fp2_tomont(&d, &d);
 
         fp2_sub(&d, &a, &b); fp2_sub(&e, &d, &c);                 // e = (a-b)-c
         fp2_add(&d, &b, &c); fp2_sub(&f, &a, &d);                 // f = a-(b+c)
-        if (compare_words((digit_t*)&e, (digit_t*)&f, 2*NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp2_is_equal(&e, &f)) { passed=0; break; }
 
         fp2_sub(&d, &a, &b);                                      // d = a-b 
         fp2_sub(&e, &b, &a);
         fp2_neg(&e, &e);                                          // e = -(b-a)
-        if (compare_words((digit_t*)&d, (digit_t*)&e, 2*NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp2_is_equal(&d, &e)) { passed=0; break; }
 
         fp2_set(&b, 0);
         fp2_sub(&d, &a, &b);                                      // d = a-0 
-        if (compare_words((digit_t*)&a, (digit_t*)&d, 2*NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp2_is_equal(&a, &d)) { passed=0; break; }
         
         fp2_set(&b, 0);              
         fp2_sub(&e, &a, &a);                                      // e = a+(-a)
-        if (compare_words((digit_t*)&e, (digit_t*)&b, 2*NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp2_is_equal(&e, &b)) { passed=0; break; }
     }
     if (passed==1) printf("  GF(p^2) subtraction tests ......................................... PASSED");
     else { printf("  GF(p^2) subtraction tests... FAILED"); printf("\n"); return false; }
@@ -137,7 +137,7 @@ bool fp2_test()
 
         fp2_set(&a, 0); fp2_tomont(&ma, &a);
         fp2_sqr(&md, &ma);                                          // d = 0^2 
-        if (compare_words((digit_t*)&ma, (digit_t*)&md, 2*NWORDS_FIELD)!=0) { passed=0; break; }
+        if (!fp2_is_equal(&ma, &md)) { passed=0; break; }
     }
     if (passed==1) printf("  GF(p^2) squaring tests............................................. PASSED");
     else { printf("  GF(p^2) squaring tests... FAILED"); printf("\n"); return false; }
@@ -194,13 +194,14 @@ bool fp2_run()
 {
     bool OK = true;
     int n;
-    unsigned long long cycles, cycles1, cycles2;
+  unsigned long long cycles, cycles1, cycles2;
+  volatile unsigned int square_result = 0;
     fp2_t a, b, c;
         
     printf("\n--------------------------------------------------------------------------------------------------------\n\n"); 
     printf("Benchmarking arithmetic over GF(p^2): \n\n"); 
         
-    fp2random_test(&a); fp2random_test(&b); fp2random_test(&c);
+    fp2random_test(&a); fp2_tomont(&a, &a); fp2random_test(&b); fp2_tomont(&b, &b); fp2random_test(&c); fp2_tomont(&c, &c);
 
     // GF(p^2) addition
     cycles = 0;
@@ -279,7 +280,7 @@ bool fp2_run()
     for (n=0; n<BENCH_LOOPS; n++)
     {
         cycles1 = cpucycles();
-        fp2_is_square(&a);
+    square_result ^= (unsigned int)fp2_is_square(&a);
         cycles2 = cpucycles();
         cycles = cycles + (cycles2 - cycles1);
     }

@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-11" cr libsqisign_common_test.a CMakeFiles/sqisign_common_test.dir/randombytes_ctrdrbg.c.o CMakeFiles/sqisign_common_test.dir/aes_c.c.o CMakeFiles/sqisign_common_test.dir/fips202.c.o CMakeFiles/sqisign_common_test.dir/mem.c.o CMakeFiles/sqisign_common_test.dir/tools.c.o
-"/usr/bin/gcc-ranlib-11" libsqisign_common_test.a
