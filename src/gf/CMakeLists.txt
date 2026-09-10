@@ -1,9 +1,9 @@
 set(CCSD_NAME gf)
 set(CCSD_NAME_UPPER GF)
-if(SQISIGN_BUILD_TYPE STREQUAL "optimized")
-    set(GF_IMPLEMENTATION optimized)
-else()
+if(SQISIGN_BUILD_TYPE STREQUAL "ref")
     set(GF_IMPLEMENTATION ref)
+else()
+    set(GF_IMPLEMENTATION fiat_crypto)
 endif()
 
 foreach(SVARIANT ${SVARIANT_S})

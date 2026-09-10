@@ -1,4 +1,5 @@
-#define NWORDS_FIELD 6
+#define NWORDS_FIELD 7
 #define NWORDS_ORDER 6
 #define BITS 384
-#define LOG2P 9
+#define LOG2P 9/* Unsaturated Montgomery limbs; integer/scalar words remain 64 bits. */
+#define FP_RADIX 55

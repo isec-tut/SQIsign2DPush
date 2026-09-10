@@ -15,31 +15,6 @@ void fp_set(
   }
 }
 
-bool fp_is_equal(const digit_t *a, const digit_t *b) {
-  digit_t r = 0;
-  for (unsigned int i = 0; i < NWORDS_FIELD; i++) r |= a[i] ^ b[i];
-  return (bool)is_digit_zero_ct(r);
-}
-
-bool fp_is_zero(const digit_t *a) {
-  digit_t r = 0;
-  for (unsigned int i = 0; i < NWORDS_FIELD; i++) r |= a[i];
-  return (bool)is_digit_zero_ct(r);
-}
-
-void fp_set_zero(digit_t *x) { memset(x, 0, sizeof(fp_t)); }
-void fp_set_small(digit_t *x, const digit_t val) { fp_set(x, val); fp_tomont(x, x); }
-void fp_set_one(digit_t *x) { fp_set_small(x, 1); }
-
-/* The reference backend has no precomputed Montgomery inverse of 3. */
-void fp_div3(digit_t *out, const digit_t *in) {
-  fp_t inv3;
-
-  fp_set_small(inv3, 3);
-  fp_inv(inv3);
-  fp_mul(out, in, inv3);
-}
-
 void fp_copy(digit_t *out, const digit_t *a) {
   memcpy(out, a, NWORDS_FIELD * RADIX / 8);
 }
@@ -364,8 +339,4 @@ bool fp_is_square(const digit_t *x) {
   uint32_t r = 1 - ((uint32_t)ls & 2);
   r &= ~fp_is_zero(x);
   return r == 1;
-}
-
-void fp_encode_legacy_hash(void *dst, const digit_t *a) {
-  memcpy(dst, a, FP_ENCODED_BYTES);
 }

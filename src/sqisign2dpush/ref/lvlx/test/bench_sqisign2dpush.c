@@ -41,6 +41,13 @@ static double elapsed_ms(clock_t start, clock_t end)
   return 1000.0 * (double)(end - start) / (double)CLOCKS_PER_SEC;
 }
 
+static double monotonic_ms(void)
+{
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  return 1000.0 * (double)now.tv_sec + (double)now.tv_nsec / 1.0e6;
+}
+
 static breakdown_ms_t keygen_breakdown(const keygen_timings_t *timings)
 {
   breakdown_ms_t result = {0};
@@ -144,6 +151,19 @@ static void print_stats(const char *name, const samples_t *samples)
          name, mean, stddev(samples, mean), median(samples), min, max);
 }
 
+static void print_time_stats(const char *name, const samples_t *samples)
+{
+  double min = samples->values[0];
+  double max = samples->values[0];
+  for (int i = 1; i < samples->count; ++i) {
+    if (samples->values[i] < min) min = samples->values[i];
+    if (samples->values[i] > max) max = samples->values[i];
+  }
+  double mean = average(samples);
+  printf("  %-7s average %.3f, stddev %.3f, median %.3f, min %.3f, max %.3f ms\n",
+         name, mean, stddev(samples, mean), median(samples), min, max);
+}
+
 static void print_breakdown(const char *name, const breakdown_ms_t *breakdown,
                             double total_ms, int iterations)
 {
@@ -173,6 +193,9 @@ int main(int argc, char **argv)
   double *keygen_cycles = NULL;
   double *sign_cycles = NULL;
   double *verify_cycles = NULL;
+  double *keygen_ms_samples = NULL;
+  double *sign_ms_samples = NULL;
+  double *verify_ms_samples = NULL;
   double keygen_seconds_total = 0.0;
   double sign_seconds_total = 0.0;
   double verify_seconds_total = 0.0;
@@ -191,15 +214,21 @@ int main(int argc, char **argv)
   keygen_cycles = calloc((size_t)iterations, sizeof(*keygen_cycles));
   sign_cycles = calloc((size_t)iterations, sizeof(*sign_cycles));
   verify_cycles = calloc((size_t)iterations, sizeof(*verify_cycles));
+  keygen_ms_samples = calloc((size_t)iterations, sizeof(*keygen_ms_samples));
+  sign_ms_samples = calloc((size_t)iterations, sizeof(*sign_ms_samples));
+  verify_ms_samples = calloc((size_t)iterations, sizeof(*verify_ms_samples));
   pks = calloc((size_t)iterations, sizeof(*pks));
   sks = calloc((size_t)iterations, sizeof(*sks));
   sigs = calloc((size_t)iterations, sizeof(*sigs));
-  if (!keygen_cycles || !sign_cycles || !verify_cycles || !pks || !sks ||
-      !sigs) {
+  if (!keygen_cycles || !sign_cycles || !verify_cycles || !keygen_ms_samples ||
+      !sign_ms_samples || !verify_ms_samples || !pks || !sks || !sigs) {
     fprintf(stderr, "failed to allocate benchmark samples\n");
     free(keygen_cycles);
     free(sign_cycles);
     free(verify_cycles);
+    free(keygen_ms_samples);
+    free(sign_ms_samples);
+    free(verify_ms_samples);
     free(pks);
     free(sks);
     free(sigs);
@@ -216,9 +245,11 @@ int main(int argc, char **argv)
   for (int i = 0; i < iterations; ++i) {
     keygen_timings_t keygen_timings;
     unsigned long long cycle_start = read_cycles();
+    double wall_start = monotonic_ms();
     clock_t cpu_start = clock();
     protocols_keygen(&pks[i], &sks[i], &keygen_timings);
     unsigned long long cycle_end = read_cycles();
+    keygen_ms_samples[i] = monotonic_ms() - wall_start;
     double keygen_ms = elapsed_ms(cpu_start, clock());
     keygen_seconds_total += keygen_ms / 1000.0;
     keygen_cycles[i] = (double)(cycle_end - cycle_start) / 1.0e6;
@@ -237,6 +268,7 @@ int main(int argc, char **argv)
     sign_timings_t sign_timings;
     unsigned long long cycle_start = read_cycles();
     unsigned long long cycle_end;
+    double wall_start = monotonic_ms();
     clock_t cpu_start = clock();
     if (protocols_sign(&sigs[i], &pks[i], &sks[i], message, sizeof(message), 0,
                &sign_timings)) {
@@ -245,6 +277,7 @@ int main(int argc, char **argv)
       goto cleanup;
     }
     cycle_end = read_cycles();
+    sign_ms_samples[i] = monotonic_ms() - wall_start;
     sign_cycles[i] = (double)(cycle_end - cycle_start) / 1.0e6;
     double sign_ms = elapsed_ms(cpu_start, clock());
     sign_seconds_total += sign_ms / 1000.0;
@@ -263,6 +296,7 @@ int main(int argc, char **argv)
     verify_timings_t verify_timings;
     unsigned long long cycle_start = read_cycles();
     unsigned long long cycle_end;
+    double wall_start = monotonic_ms();
     clock_t cpu_start = clock();
     if (!protocols_verify(&sigs[i], &pks[i], message, sizeof(message),
                 &verify_timings)) {
@@ -271,6 +305,7 @@ int main(int argc, char **argv)
       goto cleanup;
     }
     cycle_end = read_cycles();
+    verify_ms_samples[i] = monotonic_ms() - wall_start;
     verify_cycles[i] = (double)(cycle_end - cycle_start) / 1.0e6;
     double verify_ms = elapsed_ms(cpu_start, clock());
     verify_seconds_total += verify_ms / 1000.0;
@@ -289,6 +324,10 @@ int main(int argc, char **argv)
   print_stats("keygen", &(samples_t){keygen_cycles, iterations});
   print_stats("sign", &(samples_t){sign_cycles, iterations});
   print_stats("verify", &(samples_t){verify_cycles, iterations});
+  printf("Wall-clock time:\n");
+  print_time_stats("keygen", &(samples_t){keygen_ms_samples, iterations});
+  print_time_stats("sign", &(samples_t){sign_ms_samples, iterations});
+  print_time_stats("verify", &(samples_t){verify_ms_samples, iterations});
     double average_keygen_ms = 1000.0 * keygen_seconds_total / iterations;
     double average_sign_ms = 1000.0 * sign_seconds_total / iterations;
     double average_verify_ms = 1000.0 * verify_seconds_total / iterations;
@@ -315,5 +354,8 @@ cleanup:
   free(keygen_cycles);
   free(sign_cycles);
   free(verify_cycles);
+  free(keygen_ms_samples);
+  free(sign_ms_samples);
+  free(verify_ms_samples);
   return result;
 }

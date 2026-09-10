@@ -31,7 +31,7 @@ endif()
 set(C_OPT_FLAGS "")
 
 if ((NOT DEFINED SQISIGN_BUILD_TYPE))
-  set(SQISIGN_BUILD_TYPE opt)
+  set(SQISIGN_BUILD_TYPE ref)
 endif()
 
 if ((NOT DEFINED SQISIGN_TEST_REPS))
