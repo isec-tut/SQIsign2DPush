@@ -46,10 +46,10 @@ uint64_t run_batch(int op,int count,const digit_t *input) {
 }
 '''
     f=out/f'candidate{lvl}.c'; f.write_text(code)
-    args=['cc','-O3','-funroll-loops','-shared','-fPIC','-Wl,-Bsymbolic','-DDISABLE_NAMESPACING','-DRADIX_64','-DTARGET_AMD64','-DTARGET_OS_UNIX','-DSQISIGN_BUILD_TYPE_REF',f'-DSQISIGN_VARIANT=lvl{lvl}']
-    for inc in ['include','src/common/generic/include',f'src/precomp/ref/lvl{lvl}/include',f'src/gf/ref/lvl{lvl}/include']:args+=['-I',str(root/inc)]
-    args += [str(root/f'src/gf/ref/lvl{lvl}/fp.c'),str(root/f'src/gf/ref/lvl{lvl}/fp_hd{n*64}.c')]
-    fixed = root/f'src/gf/ref/lvl{lvl}/fp_exp.c'
+    args=['cc','-O3','-funroll-loops','-shared','-fPIC','-Wl,-Bsymbolic','-DDISABLE_NAMESPACING','-DRADIX_64','-DTARGET_AMD64','-DTARGET_OS_UNIX','-DSQISIGN_BUILD_TYPE_FIAT_CRYPTO',f'-DSQISIGN_VARIANT=lvl{lvl}']
+    for inc in ['include','src/common/generic/include',f'src/precomp/fiat_crypto/lvl{lvl}/include',f'src/gf/fiat_crypto/lvl{lvl}/include']:args+=['-I',str(root/inc)]
+    args += [str(root/f'src/gf/fiat_crypto/lvl{lvl}/fp.c'),str(root/f'src/gf/fiat_crypto/lvl{lvl}/fp_hd{n*64}.c')]
+    fixed = root/f'src/gf/fiat_crypto/lvl{lvl}/fp_exp.c'
     if fixed.exists():
         args.append(str(fixed))
     args += [str(f),'-o',str(out/f'probe{lvl}.so')]

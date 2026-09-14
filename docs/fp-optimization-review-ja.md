@@ -18,7 +18,7 @@ SQIsign2DPush と SQIsign v2.0 ref の Fp 実装比較（2026-09-08）
 
 **現在の 2DPush は、生成された Fiat-Crypto 演算だけを呼んでいるわけではない**
 
-`fp.c` は逆元・平方根・平方剰余判定などを担当し、基本演算の公開関数は `fp_hd*.c` の末尾にある。lvl3 の [`fp_mul`](../src/gf/ref/lvl3/fp_hd384.c#L3993) は 6×6 schoolbook 積と 128-bit ごとの blocked Montgomery reduction、[`fp_sqr`](../src/gf/ref/lvl3/fp_hd384.c#L4054) は非対角積の対称性を利用した専用平方算である。lvl1/lvl5 にも同様の独自ルーチンがある。加減算・符号反転・Montgomery 変換には Fiat の関数を使う。
+`fp.c` は逆元・平方根・平方剰余判定などを担当し、基本演算の公開関数は `fp_hd*.c` の末尾にある。lvl3 の [`fp_mul`](../src/gf/fiat_crypto/lvl3/fp_hd384.c#L3993) は 6×6 schoolbook 積と 128-bit ごとの blocked Montgomery reduction、[`fp_sqr`](../src/gf/fiat_crypto/lvl3/fp_hd384.c#L4054) は非対角積の対称性を利用した専用平方算である。lvl1/lvl5 にも同様の独自ルーチンがある。加減算・符号反転・Montgomery 変換には Fiat の関数を使う。
 
 したがって「汎用 Fiat 乗算を素数専用にする」「平方算を専用化する」は既に一部実施済み。生成ファイルの冒頭コメントだけでは実際の性能特性を判断できない。また lvl3 の `fp_inv` 直前には Bernstein–Yang/Safegcd というコメントがあるが、実体は `fp_exp3div4` と 2 回の平方算・1 回の乗算による Fermat 逆元である。
 
@@ -36,7 +36,7 @@ v2.0 の各 limb は uint64_t に格納するが、実際の基数は 2^51、2^5
 
 **候補 1: `fp_div3` の逆元を定数にする — 最優先**
 
-2DPush の [`fp_div3`](../src/gf/ref/lvl3/fp.c#L75) は毎回 `3` をセットし、Montgomery 変換、逆元計算、入力との乗算を行う。v2.0 は [`THREE_INV`](https://github.com/SQISign/the-sqisign/blob/91e9e464fe5400192d13e1f9240cbf180200a103/src/gf/ref/lvl3/fp_p65376_64.c#L617) を保持し、[`fp_div3`](https://github.com/SQISign/the-sqisign/blob/91e9e464fe5400192d13e1f9240cbf180200a103/src/gf/ref/lvl3/fp_p65376_64.c#L734) は乗算 1 回だけである。
+2DPush の [`fp_div3`](../src/gf/fiat_crypto/lvl3/fp.c#L75) は毎回 `3` をセットし、Montgomery 変換、逆元計算、入力との乗算を行う。v2.0 は [`THREE_INV`](https://github.com/SQISign/the-sqisign/blob/91e9e464fe5400192d13e1f9240cbf180200a103/src/gf/ref/lvl3/fp_p65376_64.c#L617) を保持し、[`fp_div3`](https://github.com/SQISign/the-sqisign/blob/91e9e464fe5400192d13e1f9240cbf180200a103/src/gf/ref/lvl3/fp_p65376_64.c#L734) は乗算 1 回だけである。
 
 2DPush 用に `THREE_INV = (3^(-1) × R) mod p` を再計算して、`fp_mul(out, in, THREE_INV)` に置換できる。全レベルで `p ≡ 2 (mod 3)` なので通常表現の逆元は `(p+1)/3`。v2.0 の定数値をコピーすることはできない。
 
@@ -139,7 +139,7 @@ v2.0 の `fp_is_zero`/`fp_is_equal` は真なら `0xffffffff`、2DPush は bool 
 
 **表現の移植前に整理すべき既存の入出力問題**
 
-lvl3/lvl5 の [`fp_decode`](../src/gf/ref/lvl3/fp_hd384.c#L4157) は成功マスクを uint32_t の `0xffffffff` とし、それを uint64_t へゼロ拡張して各 limb と AND する。その結果、各 limb の上位 32 bit が消える。通常整数 1 のデコードでも、得られる値が正しい Montgomery の 1 と一致しないことを再現した。成功マスクの limb 幅への拡張と、不正入力を変換関数へ渡す前の処理を見直す必要がある。
+lvl3/lvl5 の [`fp_decode`](../src/gf/fiat_crypto/lvl3/fp_hd384.c#L4157) は成功マスクを uint32_t の `0xffffffff` とし、それを uint64_t へゼロ拡張して各 limb と AND する。その結果、各 limb の上位 32 bit が消える。通常整数 1 のデコードでも、得られる値が正しい Montgomery の 1 と一致しないことを再現した。成功マスクの limb 幅への拡張と、不正入力を変換関数へ渡す前の処理を見直す必要がある。
 
 lvl1 の encode/decode は Montgomery 変換をせず内部 limb を直接バイト化・復元し、成功時に 1 を返す。lvl3/lvl5 および v2.0 の API と意味が異なる。これは lvl1 のローカルな往復だけでは検出できない契約差で、外部表現を保つ方針を決めてから移植する必要がある。
 

@@ -1,6 +1,7 @@
 #include "test_extras.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <bench.h>
 
 // Global constants
@@ -9,6 +10,99 @@ extern const digit_t p[NWORDS_FIELD];
 // Benchmark and test parameters  
 static int BENCH_LOOPS = 100000;       // Number of iterations per bench
 static int TEST_LOOPS  = 100000;       // Number of iterations per test
+
+/*
+ * RDTSC is not serializing.  Bracket a whole dependency chain with the
+ * recommended fences, rather than timing one call at a time: the latter is
+ * dominated by the two timestamp reads and lets an LTO build remove a call
+ * whose result is never used.
+ */
+#if defined(TARGET_AMD64) || defined(TARGET_X86)
+static inline uint64_t bench_cycles_start(void)
+{
+    unsigned int hi, lo;
+    asm volatile("lfence\n\trdtsc" : "=a"(lo), "=d"(hi) : : "memory");
+    return ((uint64_t)hi << 32) | lo;
+}
+
+static inline uint64_t bench_cycles_end(void)
+{
+    unsigned int hi, lo;
+    asm volatile("rdtscp\n\tlfence" : "=a"(lo), "=d"(hi) : : "rcx", "memory");
+    return ((uint64_t)hi << 32) | lo;
+}
+#else
+static inline uint64_t bench_cycles_start(void) { return (uint64_t)cpucycles(); }
+static inline uint64_t bench_cycles_end(void) { return (uint64_t)cpucycles(); }
+#endif
+
+/* A volatile sink makes the final value observable even with -O3 -flto. */
+static volatile digit_t fp2_bench_sink;
+static bool (*volatile fp2_is_square_bench)(const fp2_t *) = fp2_is_square;
+
+static void bench_consume_fp2(const fp2_t *x)
+{
+    fp2_bench_sink ^= x->re[0] ^ x->im[0];
+}
+
+#define BENCH_TIME_SAMPLES 31
+
+static uint64_t bench_wall_ns(void)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec * UINT64_C(1000000000) + now.tv_nsec;
+}
+
+static int bench_compare_u64(const void *a, const void *b)
+{
+    const uint64_t ua = *(const uint64_t *)a;
+    const uint64_t ub = *(const uint64_t *)b;
+    return (ua > ub) - (ua < ub);
+}
+
+static void bench_report(const char *name, uint64_t total_cycles,
+                         int operations, uint64_t *ns_samples, int sample_count)
+{
+    qsort(ns_samples, sample_count, sizeof(*ns_samples), bench_compare_u64);
+    printf("  %-22s %7llu cycles/op\n", name,
+           (unsigned long long)(total_cycles / operations));
+    printf("    time [ms, %d operations]: median %.3f, min %.3f, max %.3f\n",
+           operations,
+           ns_samples[sample_count / 2] * (double)operations / 1e6,
+           ns_samples[0] * (double)operations / 1e6,
+           ns_samples[sample_count - 1] * (double)operations / 1e6);
+    printf("    time [us/op]: median %.3f, min %.3f, max %.3f\n",
+           ns_samples[sample_count / 2] / 1e3,
+           ns_samples[0] / 1e3,
+           ns_samples[sample_count - 1] / 1e3);
+}
+
+/* Each sample uses a dependency chain. This prevents LTO from hoisting or
+ * deleting the operation and makes the reported cycles a latency measurement. */
+#define BENCH_FP2_CHAIN(name, operation) do { \
+    uint64_t ns_samples[BENCH_TIME_SAMPLES]; \
+    uint64_t total_cycles = 0; \
+    int sample_count = BENCH_LOOPS < BENCH_TIME_SAMPLES ? BENCH_LOOPS : BENCH_TIME_SAMPLES; \
+    int remaining = BENCH_LOOPS; \
+    int sample; \
+    for (sample = 0; sample < sample_count; sample++) { \
+        int count = remaining / (sample_count - sample); \
+        int op; \
+        uint64_t wall1, wall2, cycles1, cycles2; \
+        remaining -= count; \
+        fp2_copy(&chain, &a); \
+        wall1 = bench_wall_ns(); \
+        cycles1 = bench_cycles_start(); \
+        for (op = 0; op < count; op++) { operation; } \
+        cycles2 = bench_cycles_end(); \
+        wall2 = bench_wall_ns(); \
+        bench_consume_fp2(&chain); \
+        total_cycles += cycles2 - cycles1; \
+        ns_samples[sample] = (wall2 - wall1) / (uint64_t)count; \
+    } \
+    bench_report(name, total_cycles, BENCH_LOOPS, ns_samples, sample_count); \
+} while (0)
 
 
 /* Check the sign in ordinary representation, independently of fp_encode. */
@@ -231,99 +325,23 @@ bool fp2_test()
 bool fp2_run()
 {
     bool OK = true;
-    int n;
-    unsigned long long cycles, cycles1, cycles2;
-    volatile unsigned int square_result = 0;
-    fp2_t a, b, c;
+    unsigned int square_result = 0;
+    fp2_t a, b, chain;
         
     printf("\n--------------------------------------------------------------------------------------------------------\n\n"); 
     printf("Benchmarking arithmetic over GF(p^2): \n\n"); 
         
-    fp2random_test(&a); fp2_tomont(&a, &a); fp2random_test(&b); fp2_tomont(&b, &b); fp2random_test(&c); fp2_tomont(&c, &c);
+    fp2random_test(&a); fp2_tomont(&a, &a); fp2random_test(&b); fp2_tomont(&b, &b);
 
-    // GF(p^2) addition
-    cycles = 0;
-    for (n=0; n<BENCH_LOOPS; n++)
-    {
-        cycles1 = cpucycles(); 
-        fp2_add(&c, &a, &b);
-        cycles2 = cpucycles();
-        cycles = cycles+(cycles2-cycles1);
-    }
-    printf("  GF(p^2) addition runs in .......................................... %7lld cycles", cycles/BENCH_LOOPS);
-    printf("\n");
-
-    // GF(p^2) subtraction
-    cycles = 0;
-    for (n=0; n<BENCH_LOOPS; n++)
-    {
-        cycles1 = cpucycles(); 
-        fp2_sub(&c, &a, &b);
-        cycles2 = cpucycles();
-        cycles = cycles+(cycles2-cycles1);
-    }
-    printf("  GF(p^2) subtraction runs in ....................................... %7lld cycles", cycles/BENCH_LOOPS);
-    printf("\n");
-
-    // GF(p^2) squaring
-    cycles = 0;
-    for (n=0; n<BENCH_LOOPS; n++)
-    {
-        cycles1 = cpucycles();
-        fp2_sqr(&c, &a);
-        cycles2 = cpucycles();
-        cycles = cycles + (cycles2 - cycles1);
-    }
-    printf("  GF(p^2) squaring runs in .......................................... %7lld cycles", cycles/BENCH_LOOPS);
-    printf("\n");
-
-    // GF(p^2) multiplication
-    cycles = 0;
-    for (n=0; n<BENCH_LOOPS; n++)
-    {
-        cycles1 = cpucycles(); 
-        fp2_mul(&c, &a, &b);
-        cycles2 = cpucycles();
-        cycles = cycles+(cycles2-cycles1);
-    }
-    printf("  GF(p^2) multiplication runs in .................................... %7lld cycles", cycles/BENCH_LOOPS);
-    printf("\n");
-
-    // GF(p^2) inversion
-    cycles = 0;
-    for (n=0; n<BENCH_LOOPS; n++)
-    {
-        cycles1 = cpucycles();
-        fp2_inv(&a);
-        cycles2 = cpucycles();
-        cycles = cycles + (cycles2 - cycles1);
-    }
-    printf("  GF(p^2) inversion runs in ......................................... %7lld cycles", cycles/BENCH_LOOPS);
-    printf("\n");
-
-    // GF(p^2) square root
-    cycles = 0;
-    for (n = 0; n<BENCH_LOOPS; n++)
-    {
-        cycles1 = cpucycles();
-        fp2_sqrt(&a);
-        cycles2 = cpucycles();
-        cycles = cycles + (cycles2 - cycles1);
-    }
-    printf("  GF(p^2) square root runs in ....................................... %7lld cycles", cycles/BENCH_LOOPS);
-    printf("\n");
-
-    // Square checking
-    cycles = 0;
-    for (n=0; n<BENCH_LOOPS; n++)
-    {
-        cycles1 = cpucycles();
-        square_result ^= (unsigned int)fp2_is_square(&a);
-        cycles2 = cpucycles();
-        cycles = cycles + (cycles2 - cycles1);
-    }
-    printf("  Square checking runs in ........................................... %7lld cycles", cycles/BENCH_LOOPS);
-    printf("\n");
+    BENCH_FP2_CHAIN("GF(p^2) addition", fp2_add(&chain, &chain, &b));
+    BENCH_FP2_CHAIN("GF(p^2) subtraction", fp2_sub(&chain, &chain, &b));
+    BENCH_FP2_CHAIN("GF(p^2) squaring", fp2_sqr(&chain, &chain));
+    BENCH_FP2_CHAIN("GF(p^2) multiplication", fp2_mul(&chain, &chain, &b));
+    BENCH_FP2_CHAIN("GF(p^2) inversion", fp2_inv(&chain));
+    BENCH_FP2_CHAIN("GF(p^2) square root", fp2_sqrt(&chain));
+    BENCH_FP2_CHAIN("Square checking",
+                    square_result ^= (unsigned int)fp2_is_square_bench(&chain));
+    fp2_bench_sink ^= square_result;
 
     return OK;
 }
@@ -339,6 +357,10 @@ int main(int argc, char* argv[])
         return !fp2_test();
     } else if (!strcmp(argv[1], "bench")) {
         BENCH_LOOPS = atoi(argv[2]);
+        if (BENCH_LOOPS <= 0) {
+            printf("The benchmark repetition count must be positive.\n");
+            return 1;
+        }
         return !fp2_run();
     } else {
         exit(1);

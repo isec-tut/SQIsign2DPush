@@ -39,7 +39,7 @@ bool fp_is_square(const digit_t *a);
 void fp_sqrt(digit_t *a);
 void fp_exp3div4(digit_t *out, const digit_t *a);
 /* Legacy conversion boundary: ordinary integers use 64-bit words,
- * zero-padded to NWORDS_FIELD. Arithmetic uses FP_RADIX-bit limbs in [0,2p). */
+ * zero-padded to NWORDS_FIELD. Arithmetic uses canonical 64-bit limbs in [0,p). */
 void fp_tomont(digit_t *out, const digit_t *a);
 void fp_frommont(digit_t *out, const digit_t *a);
 void fp_mont_setone(digit_t *out);
