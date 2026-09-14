@@ -325,8 +325,7 @@ compatible with the established format.
 `represent_integer` follows the signed-coordinate search and small-prime
 two-square solver in [hiroshi-onuki/SQIsign2D-Push](https://github.com/hiroshi-onuki/SQIsign2D-Push).
 It preserves the requested norm and retries nonprimitive candidates within
-a bounded search. See [the implementation notes (Japanese)](docs/represent-integer-onuki-ja.md)
-for the upstream revision, remaining differences, and validation.
+a bounded search.
 
 ### Response sampling
 
