@@ -1,0 +1,101 @@
+{
+  "compiler": "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+  "flags": [
+    "-O3",
+    "-funroll-loops",
+    "-flto",
+    "-shared",
+    "-fPIC",
+    "-Wl,-Bsymbolic",
+    "-DDISABLE_NAMESPACING",
+    "-DRADIX_64",
+    "-DTARGET_AMD64",
+    "-DTARGET_OS_UNIX",
+    "-DSQISIGN_BUILD_TYPE_REF"
+  ],
+  "cpu_affinity": 0,
+  "iterations": 1000,
+  "rounds": 9,
+  "statistic": "median ns/call",
+  "levels": [
+    {
+      "level": 1,
+      "baseline_fp_sha256": "cb7cfc0d07885b84fe5b9a46eb550921e4a90d80040e120168a4b76d03119cf5",
+      "operations": {
+        "fp_exp3div4": {
+          "before_ns": 8948.3,
+          "after_ns": 7377.5,
+          "time_reduction_percent": 17.55
+        },
+        "fp_sqrt": {
+          "before_ns": 6671.5,
+          "after_ns": 6559.0,
+          "time_reduction_percent": 1.69
+        },
+        "fp_inv": {
+          "before_ns": 9095.6,
+          "after_ns": 7382.2,
+          "time_reduction_percent": 18.84
+        },
+        "fp2_sqrt": {
+          "before_ns": 16107.1,
+          "after_ns": 14904.0,
+          "time_reduction_percent": 7.47
+        }
+      }
+    },
+    {
+      "level": 3,
+      "baseline_fp_sha256": "ea83a06e110be84527b9e574eaf67d3fbe69e63ef4dc9cb2f4743824ece480b8",
+      "operations": {
+        "fp_exp3div4": {
+          "before_ns": 25874.5,
+          "after_ns": 25286.4,
+          "time_reduction_percent": 2.27
+        },
+        "fp_sqrt": {
+          "before_ns": 24150.7,
+          "after_ns": 21720.7,
+          "time_reduction_percent": 10.06
+        },
+        "fp_inv": {
+          "before_ns": 26053.4,
+          "after_ns": 25540.9,
+          "time_reduction_percent": 1.97
+        },
+        "fp2_sqrt": {
+          "before_ns": 51080.7,
+          "after_ns": 48854.6,
+          "time_reduction_percent": 4.36
+        }
+      }
+    },
+    {
+      "level": 5,
+      "baseline_fp_sha256": "debf97aa91e75f45633f32f3099d582c83bb1e3bb1b2cc7603613afe0384fbd7",
+      "operations": {
+        "fp_exp3div4": {
+          "before_ns": 59028.8,
+          "after_ns": 55080.8,
+          "time_reduction_percent": 6.69
+        },
+        "fp_sqrt": {
+          "before_ns": 53515.3,
+          "after_ns": 47105.9,
+          "time_reduction_percent": 11.98
+        },
+        "fp_inv": {
+          "before_ns": 59300.3,
+          "after_ns": 55399.9,
+          "time_reduction_percent": 6.58
+        },
+        "fp2_sqrt": {
+          "before_ns": 114565.6,
+          "after_ns": 104237.5,
+          "time_reduction_percent": 9.02
+        }
+      }
+    }
+  ],
+  "cpu": "11th Gen Intel(R) Core(TM) i9-11900 @ 2.50GHz"
+}

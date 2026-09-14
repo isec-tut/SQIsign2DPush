@@ -1,0 +1,86 @@
+[
+  {
+    "lvl": 1,
+    "p_bits": 255,
+    "R_over_p": 2.5899512519168937,
+    "exp_SM": [
+      252,
+      62
+    ],
+    "sqrt_SM": [
+      252,
+      37
+    ],
+    "ns": {
+      "exp_old": 9115.4,
+      "exp_window": 7514.5,
+      "sqrt_old": 6781.8,
+      "sqrt_window": 7003.8,
+      "div3_old": 9367.8,
+      "div3_const": 25.3,
+      "mul": 25.4,
+      "sqr": 24.9
+    },
+    "decode_one_ok": false,
+    "decode_one_result": "0x1",
+    "decode_one_expected": "0x3a501900cfd43406b0267d62780af87000000000000000000000000000000002",
+    "decode_reduce_max_ok": false,
+    "THREE_INV": "UINT64_C(0x5555555555555556), UINT64_C(0x5555555555555555), UINT64_C(0x900cd4762803a825), UINT64_C(0x137008559a9c1157)"
+  },
+  {
+    "lvl": 3,
+    "p_bits": 377,
+    "R_over_p": 188.62634995860697,
+    "exp_SM": [
+      371,
+      84
+    ],
+    "sqrt_SM": [
+      371,
+      47
+    ],
+    "ns": {
+      "exp_old": 25772.3,
+      "exp_window": 24930.5,
+      "sqrt_old": 23883.3,
+      "sqrt_window": 21791.4,
+      "div3_old": 26856.5,
+      "div3_const": 55.3,
+      "mul": 56.9,
+      "sqr": 50.0
+    },
+    "decode_one_ok": false,
+    "decode_one_result": "0xf237555c00000000885c3c0b00000000d0e867460000000000000000000000000000000000000000000000bc",
+    "decode_one_expected": "0xd99e2ef237555c468de27f885c3c0bb7fb600dd0e867460000000000000000000000000000000000000000000000bc",
+    "decode_reduce_max_ok": false,
+    "THREE_INV": "UINT64_C(0x5555555555555594), UINT64_C(0x5555555555555555), UINT64_C(0x5555555555555555), UINT64_C(0x3d53caaf45a2cd17), UINT64_C(0x6cd9f62a82c96959), UINT64_C(0x00488a0fa61271c9)"
+  },
+  {
+    "lvl": 5,
+    "p_bits": 511,
+    "R_over_p": 3.353923743652942,
+    "exp_SM": [
+      505,
+      105
+    ],
+    "sqrt_SM": [
+      505,
+      53
+    ],
+    "ns": {
+      "exp_old": 59532.3,
+      "exp_window": 55571.3,
+      "sqrt_old": 54414.0,
+      "sqrt_window": 48439.6,
+      "div3_old": 60844.6,
+      "div3_const": 106.8,
+      "mul": 106.0,
+      "sqr": 81.1
+    },
+    "decode_one_ok": false,
+    "decode_one_result": "0x6dcdcce2000000001db5ff9d00000000b0083c2e00000000f93a36800000000000000000000000000000000000000000000000000000000000000003",
+    "decode_one_expected": "0x1b03b46c6dcdcce29620eb301db5ff9dd5761abab0083c2e1b2b314df93a36800000000000000000000000000000000000000000000000000000000000000003",
+    "decode_reduce_max_ok": false,
+    "THREE_INV": "UINT64_C(0x5555555555555556), UINT64_C(0x5555555555555555), UINT64_C(0x5555555555555555), UINT64_C(0x5555555555555555), UINT64_C(0x77d0b59f8cb79a55), UINT64_C(0x2f6f94297c739b98), UINT64_C(0x3dce6d27230bffea), UINT64_C(0x227299df34d8666b)"
+  }
+]

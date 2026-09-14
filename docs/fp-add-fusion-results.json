@@ -1,0 +1,109 @@
+{
+  "compiler": "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+  "flags": [
+    "-O3",
+    "-funroll-loops",
+    "-flto",
+    "-shared",
+    "-fPIC",
+    "-Wl,-Bsymbolic",
+    "-DDISABLE_NAMESPACING",
+    "-DRADIX_64",
+    "-DTARGET_AMD64",
+    "-DTARGET_OS_UNIX",
+    "-DSQISIGN_BUILD_TYPE_REF"
+  ],
+  "cpu": 0,
+  "rounds": 31,
+  "iterations": 300000,
+  "units": "median ns/op",
+  "levels": [
+    {
+      "level": 1,
+      "backend_sha256": [
+        "ce79f70798ef62750f9364eaf0785df7a47b1cd2f91bcd0af9b1d37cf2d9e364",
+        "89d9e7b54c1f97307f2eb0d90a605554bc649940866f9a43e137f5d8bb243f80"
+      ],
+      "ns_per_op": {
+        "add": {
+          "before": 3.987,
+          "after": 3.954
+        },
+        "sub": {
+          "before": 3.765,
+          "after": 3.753
+        },
+        "add_chain": {
+          "before": 4.535,
+          "after": 3.958
+        },
+        "sub_chain": {
+          "before": 4.354,
+          "after": 4.367
+        },
+        "fp2mul": {
+          "before": 61.348,
+          "after": 61.234
+        }
+      }
+    },
+    {
+      "level": 3,
+      "backend_sha256": [
+        "8dde44214ed29503feefef90d3cf9dbc76472106bc26e0924b468e9b3479d047",
+        "98ce008826b4b608ce7cce32968f10f3da4f2bb1b308c0ce7d129beab90b2d54"
+      ],
+      "ns_per_op": {
+        "add": {
+          "before": 5.444,
+          "after": 5.35
+        },
+        "sub": {
+          "before": 5.057,
+          "after": 5.071
+        },
+        "add_chain": {
+          "before": 5.648,
+          "after": 5.487
+        },
+        "sub_chain": {
+          "before": 5.396,
+          "after": 5.433
+        },
+        "fp2mul": {
+          "before": 100.853,
+          "after": 100.628
+        }
+      }
+    },
+    {
+      "level": 5,
+      "backend_sha256": [
+        "36d3d05d9ca88ef956cca3b71ec961b165c571b9721fd6a34522a8dcf8e9eafa",
+        "e7b76f18e59594d083e84a01ac39c4865a0dc46c7222715f89aeb62364a9e965"
+      ],
+      "ns_per_op": {
+        "add": {
+          "before": 6.854,
+          "after": 6.607
+        },
+        "sub": {
+          "before": 6.323,
+          "after": 6.309
+        },
+        "add_chain": {
+          "before": 6.928,
+          "after": 6.983
+        },
+        "sub_chain": {
+          "before": 6.679,
+          "after": 6.639
+        },
+        "fp2mul": {
+          "before": 152.636,
+          "after": 152.601
+        }
+      }
+    }
+  ]
+}
