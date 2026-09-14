@@ -125,12 +125,6 @@ The encoding round-trip test can also be run directly:
 ./build-ref/src/sqisign2dpush/ref/lvl1/test/sqisign_test_encoding_lvl1
 ```
 
-For a configured build tree, CTest can also be used:
-
-```sh
-ctest --test-dir build-ref --output-on-failure
-```
-
 For the `fiat_crypto` configuration, use `build-fiat-crypto` as the build
 directory in these commands. Protocol test binaries are still under
 `src/sqisign2dpush/ref` within that build directory.
